@@ -22,9 +22,14 @@ except FileNotFoundError:
 
 FICHIER_EXCEL = "prix_lego.xlsx"
 
-EMAIL_ADRESSE = "trackerlego.price@gmail.com"
-EMAIL_MOT_DE_PASSE = "ehnn khep ummh cmyt"
-EMAIL_DESTINATAIRE = "audrey.deal@outlook.fr"
+EMAIL_ADRESSE = os.getenv('GMAIL_ADDRESS')
+EMAIL_MOT_DE_PASSE = os.getenv('GMAIL_APP_PASSWORD')
+EMAIL_DESTINATAIRE = os.getenv('MAIL_DESTINATAIRE')
+
+# Vérification que les secrets sont bien chargés
+if not all([EMAIL_ADRESSE, EMAIL_MOT_DE_PASSE, EMAIL_DESTINATAIRE]):
+    print("Erreur: Les secrets pour l'email (GMAIL_ADDRESS, GMAIL_APP_PASSWORD, MAIL_DESTINATAIRE) ne sont pas configurés.")
+    exit()
 
 
 # --- Fonctions de scraping ---
