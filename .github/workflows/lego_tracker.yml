@@ -1,0 +1,47 @@
+# Nom de votre workflow (ce que vous verrez dans l'onglet Actions)
+name: Lego Price Tracker
+
+# Déclencheurs : QUAND lancer le script
+on:
+  # Permet de le lancer manuellement depuis l'interface GitHub
+  workflow_dispatch:
+
+  # Déclencheur planifié (schedule)
+  schedule:
+    # 'cron' est un format pour définir le temps. '0 10 * * *' signifie "à 10:00 UTC tous les jours".
+    # 10:00 UTC = 12:00 heure de Paris en été, 11:00 en hiver. C'est l'heure de votre demande (midi).
+    - cron: '0 10 * * *'
+
+# Les Tâches : COMMENT lancer le script
+jobs:
+  # On définit une tâche unique qu'on appelle "run-tracker"
+  run-tracker:
+    # La machine virtuelle sur laquelle le script va tourner (Ubuntu est parfait)
+    runs-on: ubuntu-latest
+
+    # Les étapes à exécuter
+    steps:
+      # 1. Récupérer le code de votre dépôt
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Configurer Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11' # Vous pouvez choisir votre version de Python
+
+      # 3. Installer les librairies nécessaires
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 4. Lancer le script Python
+      - name: Run Lego Price Tracker
+        # On passe les secrets au script via des variables d'environnement
+        env:
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE }}
+        run: python catch_lego_price.py
