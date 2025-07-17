@@ -33,22 +33,25 @@ if not all([EMAIL_ADRESSE, EMAIL_MOT_DE_PASSE, EMAIL_DESTINATAIRE]):
     exit()
 
 
-# --- Fonctions de scraping ---
-
 def recuperer_prix_amazon(url, headers):
     try:
         reponse = requests.get(url, headers=headers, verify=False)
         reponse.raise_for_status()
         soup = BeautifulSoup(reponse.content, 'html.parser')
+        
         partie_entiere_elem = soup.select_one("span.a-price-whole")
         partie_fraction_elem = soup.select_one("span.a-price-fraction")
+        
         if partie_entiere_elem and partie_fraction_elem:
             partie_entiere_texte = partie_entiere_elem.get_text()
             partie_fraction_texte = partie_fraction_elem.get_text(strip=True)
             partie_entiere_propre = "".join(filter(str.isdigit, partie_entiere_texte))
             prix_complet_str = f"{partie_entiere_propre}.{partie_fraction_texte}"
             return float(prix_complet_str)
-        return None
+        else:
+            print(f"  -> DEBUG: Sélecteurs de prix non trouvés. Titre de la page reçue : {soup.title.string.strip()}")
+            return None
+            
     except Exception as e:
         print(f"Erreur en récupérant le prix sur Amazon ({url}): {e}")
         return None
@@ -93,7 +96,12 @@ def verifier_les_prix():
     except FileNotFoundError:
         print("Fichier Excel non trouvé. Création d'un nouveau fichier.")
         df = pd.DataFrame({'Date': pd.Series(dtype='str'),'ID_Set': pd.Series(dtype='str'),'Nom_Set': pd.Series(dtype='str'),'Site': pd.Series(dtype='str'),'Prix': pd.Series(dtype='float')})
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36', 'Accept-Language': 'fr-FR,fr;q=0.9'}
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept-Language': 'fr-FR,fr;q=0.9' # <-- LA LIGNE CLÉ !
+    }
+
     lignes_a_ajouter = []
     for set_id, set_info in SETS_A_SURVEILLER.items():
         nom_set = set_info['nom']
