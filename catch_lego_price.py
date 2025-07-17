@@ -7,7 +7,8 @@ import schedule
 import smtplib
 from email.mime.text import MIMEText
 import urllib3
-import json # <-- IMPORTER LA LIBRAIRIE JSON
+import json 
+import os
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
