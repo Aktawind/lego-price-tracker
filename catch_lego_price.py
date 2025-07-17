@@ -126,10 +126,7 @@ def verifier_les_prix():
         df.to_excel(FICHIER_EXCEL, index=False)
         print("Modifications enregistrées dans le fichier Excel.")
 
-# --- PLANIFICATION ---
-schedule.every().day.at("12:00").do(verifier_les_prix)
-verifier_les_prix()
-print("Le script est en attente de la prochaine exécution planifiée...")
-while True:
-    schedule.run_pending()
-    time.sleep(60)
+# Ce bloc garantit que la fonction principale est appelée
+# uniquement lorsque le script est exécuté directement.
+if __name__ == "__main__":
+    verifier_les_prix()
