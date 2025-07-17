@@ -1,0 +1,21 @@
+{
+    "75313": {
+        "nom": "AT-AT™",
+        "sites": { 
+            "Amazon": {
+                "url": "https://www.amazon.fr/dp/B09JKZ62H7", 
+                "type": "amazon"
+            } 
+        }
+    },
+    "10348": {
+        "nom": "Bonsaï d’érable rouge du Japon",
+        "sites": {
+            "Lego.com": {
+                "url": "https://www.lego.com/fr-fr/product/japanese-red-maple-bonsai-tree-10348", 
+                "type": "standard",
+                "selecteur": "[data-test=\"product-price\"]"
+            }
+        }
+    }
+}
