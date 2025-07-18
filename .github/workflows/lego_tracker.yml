@@ -55,7 +55,7 @@ jobs:
 
       - name: Upload screenshot on failure
         # Ne s'exécute QUE si l'étape précédente a échoué
-        if: failure() && steps.run_script.outcome == 'failure'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: amazon-screenshot
