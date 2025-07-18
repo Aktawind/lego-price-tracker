@@ -10,6 +10,12 @@ import urllib3
 import json 
 import os
 
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
@@ -38,6 +44,41 @@ def recuperer_prix_amazon(url, headers):
         reponse = requests.get(url, headers=headers, verify=False)
         reponse.raise_for_status()
         soup = BeautifulSoup(reponse.content, 'html.parser')
+        partie_entiere_elem = soup.select_one("span.a-price-whole")
+        partie_fraction_elem = soup.select_one("span.a-price-fraction")
+        if partie_entiere_elem and partie_fraction_elem:
+            partie_entiere_texte = partie_entiere_elem.get_text()
+            partie_fraction_texte = partie_fraction_elem.get_text(strip=True)
+            partie_entiere_propre = "".join(filter(str.isdigit, partie_entiere_texte))
+            prix_complet_str = f"{partie_entiere_propre}.{partie_fraction_texte}"
+            return float(prix_complet_str)
+        return None
+    except Exception as e:
+        print(f"Erreur en récupérant le prix sur Amazon ({url}): {e}")
+        return None
+    
+def recuperer_prix_amazon_selenium(url, headers):
+    """Récupère le prix sur Amazon en utilisant Selenium pour simuler un vrai navigateur."""
+    print("  -> Utilisation de la méthode Selenium pour Amazon...")
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")  # Exécute Chrome sans interface graphique
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument(f"user-agent={headers['User-Agent']}")
+    chrome_options.add_argument(f"accept-language={headers['Accept-Language']}")
+    
+    driver = webdriver.Chrome(options=chrome_options)
+    
+    try:
+        driver.get(url)
+        # On attend jusqu'à 10 secondes que l'élément du prix soit visible
+        # C'est beaucoup plus fiable que de lire le HTML immédiatement
+        WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located((By.CSS_SELECTOR, "span.a-price-whole"))
+        )
+        
+        # Une fois que c'est visible, on récupère le code source de la page
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
         
         partie_entiere_elem = soup.select_one("span.a-price-whole")
         partie_fraction_elem = soup.select_one("span.a-price-fraction")
@@ -48,13 +89,13 @@ def recuperer_prix_amazon(url, headers):
             partie_entiere_propre = "".join(filter(str.isdigit, partie_entiere_texte))
             prix_complet_str = f"{partie_entiere_propre}.{partie_fraction_texte}"
             return float(prix_complet_str)
-        else:
-            print(f"  -> DEBUG: Sélecteurs de prix non trouvés. Titre de la page reçue : {soup.title.string.strip()}")
             return None
             
     except Exception as e:
-        print(f"Erreur en récupérant le prix sur Amazon ({url}): {e}")
+        print(f"Erreur avec Selenium pour Amazon ({url}): {e}")
         return None
+    finally:
+        driver.quit() # Très important de fermer le navigateur
 
 def recuperer_prix_standard(url, selecteur, headers):
     try:
@@ -71,7 +112,6 @@ def recuperer_prix_standard(url, selecteur, headers):
         print(f"Erreur en récupérant le prix pour {url}: {e}")
         return None
 
-# --- Le reste du script reste inchangé ---
 def envoyer_email_alerte(nom_set, nouveau_prix, site, url):
     # (code inchangé)
     sujet = f"Alerte Baisse de Prix LEGO : {nom_set}"
@@ -110,6 +150,8 @@ def verifier_les_prix():
             prix_actuel = None
             if site_info['type'] == 'amazon':
                 prix_actuel = recuperer_prix_amazon(site_info['url'], headers)
+            elif site_info['type'] == 'amazon_selenium':
+                prix_actuel = recuperer_prix_amazon_selenium(site_info['url'], headers)
             elif site_info['type'] == 'standard':
                 prix_actuel = recuperer_prix_standard(site_info['url'], site_info['selecteur'], headers)
             if prix_actuel is None:
