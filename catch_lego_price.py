@@ -70,36 +70,39 @@ def recuperer_prix_amazon_selenium(url, headers):
     chrome_options.add_argument(f"accept-language={headers['Accept-Language']}")
     
     driver = webdriver.Chrome(options=chrome_options)
+
+    # On définit un temps d'attente maximum pour toutes les recherches
+    wait = WebDriverWait(driver, 5) # Attend jusqu'à 5 secondes
     
     try:
         driver.get(url)
-        time.sleep(2)
 
-        # === NOUVELLE ÉTAPE : GÉRER LA PAGE INTERMÉDIAIRE ===
+        # 1. Gérer la page intermédiaire 'Continuer' AVEC UN WAIT
         try:
-            # On cherche le bouton par son texte "Continuer les achats" via XPath. C'est très fiable.
-            continuer_button = driver.find_element(By.XPATH, '//input[@value="Continuer les achats"]')
+            # On attend que le bouton soit cliquable
+            continuer_button = wait.until(
+                EC.element_to_be_clickable((By.XPATH, '//input[@value="Continuer les achats"]'))
+            )
             print("  -> Page intermédiaire 'Continuer' détectée. Clic...")
             continuer_button.click()
-            # On attend un peu que la nouvelle page se charge
-            time.sleep(3)
+            # On attend que la nouvelle page se charge en vérifiant que l'ancien bouton a disparu
+            wait.until(EC.staleness_of(continuer_button))
         except Exception:
-            print("  -> Pas de page intermédiaire 'Continuer' visible.")
+            print("  -> Pas de page intermédiaire 'Continuer' visible dans le temps imparti.")
 
-        # ÉTAPE EXISTANTE : Tenter de cliquer sur le bouton d'acceptation des cookies
+        # 2. Gérer la bannière de cookies AVEC UN WAIT
         try:
-            bouton_cookies = driver.find_element(By.ID, "sp-cc-accept")
-            if bouton_cookies:
-                print("  -> Bannière de cookies trouvée. Clic sur 'Accepter'.")
-                bouton_cookies.click()
-                time.sleep(2)
+            bouton_cookies = wait.until(
+                EC.element_to_be_clickable((By.ID, "sp-cc-accept"))
+            )
+            print("  -> Bannière de cookies trouvée. Clic sur 'Accepter'.")
+            bouton_cookies.click()
+            wait.until(EC.invisibility_of_element(bouton_cookies))
         except Exception:
-            print("  -> Pas de bannière de cookies visible ou déjà acceptée.")
+            print("  -> Pas de bannière de cookies visible dans le temps imparti.")
 
-        # ÉTAPE EXISTANTE : Attendre que le prix soit visible
-        WebDriverWait(driver, 10).until(
-            EC.visibility_of_element_located((By.CSS_SELECTOR, "span.a-price-whole"))
-        )
+        # 3. Attendre l'élément final du prix
+        wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "span.a-price-whole")))
         
         # Le reste est inchangé
         soup = BeautifulSoup(driver.page_source, 'html.parser')
