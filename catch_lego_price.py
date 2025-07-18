@@ -265,10 +265,15 @@ def verifier_les_prix():
                 logging.info("Pas de changement de prix.")
             time.sleep(5)
     if lignes_a_ajouter:
-        nouvelles_lignes_df = pd.DataFrame(lignes_a_ajouter)
-        df = pd.concat([df, nouvelles_lignes_df], ignore_index=True)
+        df_a_ajouter = pd.DataFrame(lignes_a_ajouter)
+        df = pd.concat([df, df_a_ajouter], ignore_index=True)
+        
+        # S'assurer que les types de données sont corrects avant de sauvegarder
+        df['ID_Set'] = df['ID_Set'].astype(str)
+        df['Prix'] = df['Prix'].astype(float)
+        
         df.to_excel(FICHIER_EXCEL, index=False)
-        logging.info("Modifications enregistrées dans le fichier Excel.")
+        logging.info(f"{len(lignes_a_ajouter)} modifications enregistrées dans le fichier Excel.")
 
 # Ce bloc garantit que la fonction principale est appelée
 # uniquement lorsque le script est exécuté directement.
