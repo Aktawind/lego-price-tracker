@@ -111,31 +111,30 @@ def recuperer_prix_amazon_selenium(url, headers):
     wait = WebDriverWait(driver, 10)
     
     try:
+        driver.get("https://www.amazon.fr/")
+        cookie = {'name': 'sp-cdn', 'value': '"L5Z9:FR"'}
+        driver.add_cookie(cookie)
         driver.get(url)
 
         # 1. Gérer la page 'Continuer'
         try:
-            # On cherche un élément <button> qui contient le texte 'Continuer les achats'
             continuer_button = wait.until(
                 EC.element_to_be_clickable((By.XPATH, "//button[text()='Continuer les achats']"))
             )
-            #logging.info("Page intermédiaire 'Continuer' détectée. Clic...")
             continuer_button.click()
-            # On attend que la nouvelle page se charge
             wait.until(EC.staleness_of(continuer_button)) 
         except Exception:
-            logging.info("Pas de page intermédiaire 'Continuer' visible dans le temps imparti.")
+            pass
 
         # 2. Gérer la bannière de cookies
         try:
             bouton_cookies = wait.until(
                 EC.element_to_be_clickable((By.ID, "sp-cc-accept"))
             )
-            #logging.info("Bannière de cookies trouvée. Clic sur 'Accepter'.")
             bouton_cookies.click()
             wait.until(EC.invisibility_of_element(bouton_cookies))
         except Exception:
-            logging.info("Pas de bannière de cookies visible dans le temps imparti.")
+            pass
 
         # 3. Attendre l'élément final du prix
         wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "span.a-price-whole")))
