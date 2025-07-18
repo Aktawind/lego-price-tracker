@@ -77,18 +77,40 @@ def recuperer_prix_amazon_selenium(url, headers):
     try:
         driver.get(url)
 
-        # 1. Gérer la page intermédiaire 'Continuer' AVEC UN WAIT
+         # 1. Gérer la page 'Continuer' (avec recherche dans les iFrames)
         try:
-            # On attend que le bouton soit cliquable
-            continuer_button = wait.until(
-                EC.element_to_be_clickable((By.XPATH, '//input[@value="Continuer les achats"]'))
-            )
-            print("  -> Page intermédiaire 'Continuer' détectée. Clic...")
+            # On essaie d'abord dans la page principale
+            continuer_button = wait.until(EC.element_to_be_clickable((By.XPATH, '//input[@value="Continuer les achats"]')))
+            print("  -> Page intermédiaire 'Continuer' détectée dans la page principale. Clic...")
             continuer_button.click()
-            # On attend que la nouvelle page se charge en vérifiant que l'ancien bouton a disparu
-            wait.until(EC.staleness_of(continuer_button))
         except Exception:
-            print("  -> Pas de page intermédiaire 'Continuer' visible dans le temps imparti.")
+            # Si ça échoue, on cherche dans les iFrames
+            print("  -> Bouton 'Continuer' non trouvé en principal. Recherche dans les iframes...")
+            try:
+                # On attend qu'au moins une iframe soit présente
+                wait.until(EC.presence_of_element_located((By.TAG_NAME, 'iframe')))
+                iframes = driver.find_elements(By.TAG_NAME, 'iframe')
+                print(f"  -> {len(iframes)} iframe(s) trouvé(es).")
+                
+                button_found = False
+                for frame in iframes:
+                    try:
+                        driver.switch_to.frame(frame) # On entre dans l'iframe
+                        continuer_button = wait.until(EC.element_to_be_clickable((By.XPATH, '//input[@value="Continuer les achats"]')))
+                        print("  -> Bouton 'Continuer' trouvé dans un iframe ! Clic...")
+                        continuer_button.click()
+                        button_found = True
+                        break # On a trouvé le bouton, on sort de la boucle
+                    except Exception:
+                        continue # Pas dans cet iframe, on passe au suivant
+                    finally:
+                        driver.switch_to.default_content() # TRÈS IMPORTANT: on revient à la page principale
+                
+                if not button_found:
+                    print("  -> Bouton 'Continuer' non trouvé dans aucun iframe.")
+            
+            except Exception as e:
+                print(f"  -> Aucune iframe trouvée ou erreur lors de la recherche: {e}")
 
         # 2. Gérer la bannière de cookies AVEC UN WAIT
         try:
@@ -118,9 +140,15 @@ def recuperer_prix_amazon_selenium(url, headers):
         return None
 
     except Exception as e:
-        print(f"Erreur avec Selenium pour Amazon ({url}): {e}")
+        print(f"Erreur finale avec Selenium pour Amazon ({url}): {e}")
         print("  -> Prise d'une capture d'écran pour le débogage : amazon_debug_screenshot.png")
         driver.save_screenshot("amazon_debug_screenshot.png")
+        
+        # === DUMP HTML COMPLET POUR ANALYSE ULTIME ===
+        print("\n--- DEBUT DU CODE HTML DE LA PAGE EN ERREUR ---\n")
+        print(driver.page_source)
+        print("\n--- FIN DU CODE HTML DE LA PAGE EN ERREUR ---\n")
+        
         return None
     finally:
         driver.quit()
