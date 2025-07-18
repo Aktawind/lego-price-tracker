@@ -59,14 +59,13 @@ def recuperer_prix_amazon(url, headers):
         return None
     
 def recuperer_prix_amazon_selenium(url, headers):
-    """VERSION FINALE : Gère les cookies, attend les éléments et prend une capture d'écran en cas d'échec."""
+    """VERSION FINALE++ : Gère la page intermédiaire, les cookies, attend les éléments et prend une capture d'écran en cas d'échec."""
     print("  -> Utilisation de la méthode Selenium pour Amazon...")
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    # Pour s'assurer que la fenêtre est assez grande pour tout afficher
-    chrome_options.add_argument("--window-size=1920,1080") 
+    chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument(f"user-agent={headers['User-Agent']}")
     chrome_options.add_argument(f"accept-language={headers['Accept-Language']}")
     
@@ -74,31 +73,40 @@ def recuperer_prix_amazon_selenium(url, headers):
     
     try:
         driver.get(url)
-        time.sleep(2) # On laisse une petite pause initiale
+        time.sleep(2)
 
-        # 1. Tenter de cliquer sur le bouton d'acceptation des cookies
+        # === NOUVELLE ÉTAPE : GÉRER LA PAGE INTERMÉDIAIRE ===
         try:
-            # L'ID 'sp-cc-accept' est l'identifiant standard du bouton "Accepter" sur Amazon
+            # On cherche le bouton par son texte "Continuer les achats" via XPath. C'est très fiable.
+            continuer_button = driver.find_element(By.XPATH, '//input[@value="Continuer les achats"]')
+            print("  -> Page intermédiaire 'Continuer' détectée. Clic...")
+            continuer_button.click()
+            # On attend un peu que la nouvelle page se charge
+            time.sleep(3)
+        except Exception:
+            print("  -> Pas de page intermédiaire 'Continuer' visible.")
+
+        # ÉTAPE EXISTANTE : Tenter de cliquer sur le bouton d'acceptation des cookies
+        try:
             bouton_cookies = driver.find_element(By.ID, "sp-cc-accept")
             if bouton_cookies:
                 print("  -> Bannière de cookies trouvée. Clic sur 'Accepter'.")
                 bouton_cookies.click()
-                time.sleep(2) # On attend que la bannière disparaisse
+                time.sleep(2)
         except Exception:
             print("  -> Pas de bannière de cookies visible ou déjà acceptée.")
 
-        # 2. Attendre que le prix soit visible
+        # ÉTAPE EXISTANTE : Attendre que le prix soit visible
         WebDriverWait(driver, 10).until(
             EC.visibility_of_element_located((By.CSS_SELECTOR, "span.a-price-whole"))
         )
         
+        # Le reste est inchangé
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        
         partie_entiere_elem = soup.select_one("span.a-price-whole")
         partie_fraction_elem = soup.select_one("span.a-price-fraction")
         
         if partie_entiere_elem and partie_fraction_elem:
-            # ... (code de récupération du prix inchangé) ...
             partie_entiere_texte = partie_entiere_elem.get_text()
             partie_fraction_texte = partie_fraction_elem.get_text(strip=True)
             partie_entiere_propre = "".join(filter(str.isdigit, partie_entiere_texte))
@@ -108,7 +116,6 @@ def recuperer_prix_amazon_selenium(url, headers):
 
     except Exception as e:
         print(f"Erreur avec Selenium pour Amazon ({url}): {e}")
-        # 3. On prend la capture d'écran juste avant de planter
         print("  -> Prise d'une capture d'écran pour le débogage : amazon_debug_screenshot.png")
         driver.save_screenshot("amazon_debug_screenshot.png")
         return None
