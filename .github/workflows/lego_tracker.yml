@@ -1,6 +1,9 @@
 # Nom de votre workflow (ce que vous verrez dans l'onglet Actions)
 name: Lego Price Tracker
 
+permissions:
+  contents: write
+
 # Déclencheurs : QUAND lancer le script
 on:
   # Permet de le lancer manuellement depuis l'interface GitHub
@@ -45,3 +48,11 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE }}
         run: python catch_lego_price.py
+
+      # 5. Commit du fichier Excel
+      - name: Commit and push if changed
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add prix_lego.xlsx
+          git diff-index --quiet HEAD || git commit -m "Update price data" && git push
