@@ -4,7 +4,7 @@
         "sites": { 
             "Amazon": {
                 "url": "https://www.amazon.fr/dp/B09JKZ62H7", 
-                "type": "amazon"
+                "type": "amazon_selenium"
             } 
         }
     },
