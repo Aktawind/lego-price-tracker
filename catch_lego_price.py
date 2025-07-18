@@ -9,6 +9,7 @@ import urllib3
 import os
 import time
 import logging
+import re
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -24,51 +25,69 @@ logging.basicConfig(
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+CONFIG_SITES = {
+    "Amazon": {
+        "type": "amazon",
+        "selecteur": None
+    },
+    "Lego": {
+        "type": "standard",
+        "selecteur": '[data-test="product-price"]'
+    },
+    "Auchan": {
+        "type": "standard",
+        "selecteur": ".product-price"
+    },
+    "Leclerc": {
+        "type": "standard",
+        "selecteur": ".egToM .visually-hidden"
+    }
+}
+
 # Lecture de la configuration des sets
-def charger_configuration_sets(fichier_config):
-    # Lit le fichier de configuration Excel et le transforme en dictionnaire
+def charger_configuration_sets(fichier_config, config_sites):
+    """Lit le fichier de configuration Excel au format "large" et le transforme en dictionnaire."""
     try:
         df_config = pd.read_excel(fichier_config, dtype=str)
-        # Remplacer les valeurs 'NaN' (cellules vides) par des chaînes vides
         df_config.fillna('', inplace=True)
         
         sets_a_surveiller = {}
         for index, row in df_config.iterrows():
             set_id = row['ID_Set']
             
-            # Si c'est la première fois qu'on voit ce set, on l'initialise
-            if set_id not in sets_a_surveiller:
-                sets_a_surveiller[set_id] = {
-                    "nom": row['Nom_Set'],
-                    "sites": {}
-                }
-            
-            # On prépare les infos du site
-            site_info = {
-                "url": row['URL'],
-                "type": row['Type']
+            sets_a_surveiller[set_id] = {
+                "nom": row['Nom_Set'],
+                "sites": {}
             }
-            # On ajoute le sélecteur seulement s'il n'est pas vide
-            if row['Selecteur']:
-                site_info['selecteur'] = row['Selecteur']
-                
-            # On ajoute le site à la liste du set
-            sets_a_surveiller[set_id]['sites'][row['Site']] = site_info
             
+            for site_nom, site_config in config_sites.items():
+                colonne_url = f"URL_{site_nom}"
+                
+                if colonne_url in row and row[colonne_url]:
+                    site_info = site_config.copy()
+                    site_info['url'] = row[colonne_url]
+                    
+                    # Le nom du site sera "Amazon", "Lego", "Cdiscount"...
+                    sets_a_surveiller[set_id]['sites'][site_nom] = site_info
+                    
         return sets_a_surveiller
 
     except FileNotFoundError:
         logging.error(f"Erreur: Le fichier de configuration '{fichier_config}' est introuvable.")
         return None
+    except KeyError as e:
+        logging.error(f"Erreur de configuration: Colonne manquante dans '{fichier_config}': {e}")
+        return None
     except Exception as e:
         logging.error(f"Erreur lors de la lecture du fichier de configuration Excel: {e}")
         return None
     
-SETS_A_SURVEILLER = charger_configuration_sets('config_sets.xlsx')
+SETS_A_SURVEILLER = charger_configuration_sets('config_sets.xlsx', CONFIG_SITES)
 FICHIER_EXCEL = "prix_lego.xlsx"
 EMAIL_ADRESSE = os.getenv('GMAIL_ADDRESS')
 EMAIL_MOT_DE_PASSE = os.getenv('GMAIL_APP_PASSWORD')
 EMAIL_DESTINATAIRE = os.getenv('MAIL_DESTINATAIRE')
+
 # Vérification que la configuration des sets a été chargée correctement
 if not SETS_A_SURVEILLER:
     exit()
@@ -139,18 +158,36 @@ def recuperer_prix_amazon_selenium(url, headers):
     finally:
         driver.quit()
 
-# Fonction pour récupérer le prix sur un site standard
 def recuperer_prix_standard(url, selecteur, headers):
     try:
         reponse = requests.get(url, headers=headers, verify=False)
         reponse.raise_for_status()
         soup = BeautifulSoup(reponse.content, 'html.parser')
+        
+        # 1. On utilise le sélecteur pour trouver la "boîte" qui contient le prix.
         element_prix = soup.select_one(selecteur)
-        if element_prix:
-            prix_texte = element_prix.get_text()
-            prix_nettoye = prix_texte.replace('\u202f', '').replace('\xa0', '').replace(' ', '').replace('€', '').replace(',', '.').strip()
-            return float(prix_nettoye)
+        
+        if not element_prix:
+            logging.warning(f"Sélecteur '{selecteur}' non trouvé sur la page {url}")
+            return None
+            
+        # 2. On prend UNIQUEMENT le texte de cette boîte.
+        prix_texte_brut = element_prix.get_text()
+        #logging.info(f"Texte brut trouvé avec le sélecteur '{selecteur}': '{prix_texte_brut.strip()}'")
+
+        # 3. On applique notre regex chirurgicale sur ce petit bout de texte.
+        match = re.search(r'\b(\d+[.,]\d{1,2})\b', prix_texte_brut)
+        if match:
+            prix_str = match.group(1).replace(',', '.')
+            return float(prix_str)
+            
+        match_entier = re.search(r'(\d+)\s*€', prix_texte_brut)
+        if match_entier:
+            return float(match_entier.group(1))
+
+        logging.warning(f"Aucun motif de prix trouvé dans le texte '{prix_texte_brut.strip()}'")
         return None
+        
     except Exception as e:
         logging.error(f"Erreur en récupérant le prix pour {url}: {e}")
         return None
