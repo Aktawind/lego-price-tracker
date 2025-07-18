@@ -45,12 +45,21 @@ jobs:
 
       # 4. Lancer le script Python
       - name: Run Lego Price Tracker
+        id: run_script # On donne un ID à l'étape pour pouvoir vérifier son statut
         # On passe les secrets au script via des variables d'environnement
         env:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE }}
         run: python catch_lego_price.py
+
+      - name: Upload screenshot on failure
+        # Ne s'exécute QUE si l'étape précédente a échoué
+        if: failure() && steps.run_script.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: amazon-screenshot
+          path: amazon_debug_screenshot.png
 
       # 5. Commit du fichier Excel
       - name: Commit and push if changed
