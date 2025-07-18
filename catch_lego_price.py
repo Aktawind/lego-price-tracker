@@ -191,6 +191,28 @@ def recuperer_prix_standard(url, selecteur, headers):
         logging.error(f"Erreur en récupérant le prix pour {url}: {e}")
         return None
 
+# Fonction pour obtenir la localisation de l'IP actuelle
+def obtenir_localisation_ip():
+    """Interroge un service externe pour connaître la localisation de l'IP actuelle."""
+    try:
+        logging.info("Tentative de récupération de la localisation de l'IP...")
+        # ipinfo.io/json renvoie des informations sur l'IP qui fait la requête
+        reponse = requests.get("https://ipinfo.io/json", timeout=5)
+        reponse.raise_for_status()
+        
+        data = reponse.json()
+        ip = data.get('ip', 'N/A')
+        pays = data.get('country', 'N/A')
+        region = data.get('region', 'N/A')
+        ville = data.get('city', 'N/A')
+        
+        logging.info(f"Localisation détectée : IP={ip}, Pays={pays}, Région={region}, Ville={ville}")
+        return pays # On renvoie le code pays, ex: "DE", "IE", "NL"
+        
+    except Exception as e:
+        logging.error(f"Impossible de récupérer la localisation de l'IP: {e}")
+        return None
+
 # Fonction pour envoyer un email d'alerte
 def envoyer_email_alerte(nom_set, nouveau_prix, site, url):
     sujet = f"Alerte Baisse de Prix LEGO : {nom_set}"
@@ -278,4 +300,5 @@ def verifier_les_prix():
 # Ce bloc garantit que la fonction principale est appelée
 # uniquement lorsque le script est exécuté directement.
 if __name__ == "__main__":
+    obtenir_localisation_ip()
     verifier_les_prix()
