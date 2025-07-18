@@ -1,67 +1,50 @@
-# Nom de votre workflow (ce que vous verrez dans l'onglet Actions)
 name: Lego Price Tracker
 
 permissions:
   contents: write
 
-# Déclencheurs : QUAND lancer le script
+# Déclencheurs : 
 on:
-  # Permet de le lancer manuellement depuis l'interface GitHub
   workflow_dispatch:
-
-  # Déclencheur planifié (schedule)
   schedule:
-    # 'cron' est un format pour définir le temps. '0 10 * * *' signifie "à 10:00 UTC tous les jours".
-    # 10:00 UTC = 12:00 heure de Paris en été, 11:00 en hiver. C'est l'heure de votre demande (midi).
     - cron: '0 10 * * *'
 
-# Les Tâches : COMMENT lancer le script
+# Tâches : 
 jobs:
-  # On définit une tâche unique qu'on appelle "run-tracker"
   run-tracker:
-    # La machine virtuelle sur laquelle le script va tourner (Ubuntu est parfait)
+    # La machine virtuelle sur laquelle le script va tourner
     runs-on: ubuntu-latest
-
-    # Les étapes à exécuter
     steps:
-      # 1. Récupérer le code de votre dépôt
+      # Récupérer le code du dépôt
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Configurer Chrome pour Selenium
       - name: Setup Chrome
         uses: browser-actions/setup-chrome@v1
 
-      # 2. Configurer Python
+      # Configurer Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11' # Vous pouvez choisir votre version de Python
+          python-version: '3.11'
 
-      # 3. Installer les librairies nécessaires
+      # Installer les librairies nécessaires
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 4. Lancer le script Python
+      # Lancer le script Python
       - name: Run Lego Price Tracker
-        id: run_script # On donne un ID à l'étape pour pouvoir vérifier son statut
-        # On passe les secrets au script via des variables d'environnement
+        id: run_script
         env:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE }}
         run: python catch_lego_price.py
 
-      - name: Upload screenshot on failure
-        # Ne s'exécute QUE si l'étape précédente a échoué
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: amazon-screenshot
-          path: amazon_debug_screenshot.png
-
-      # 5. Commit du fichier Excel
+      # Commit du fichier Excel
       - name: Commit and push if changed
         run: |
           git config --global user.name "GitHub Actions"
