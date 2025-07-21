@@ -100,12 +100,12 @@ if not all([EMAIL_ADRESSE, EMAIL_MOT_DE_PASSE, EMAIL_DESTINATAIRE]):
 def obtenir_localisation_ip():
     """Interroge un service externe pour connaître la localisation de l'IP actuelle."""
     try:
-        logging.info("Récupération de la localisation de l'IP...")
+        #logging.info("Récupération de la localisation de l'IP...")
         reponse = requests.get("https://ipinfo.io/json", timeout=5)
         reponse.raise_for_status()
         data = reponse.json()
         pays = data.get('country', 'N/A')
-        logging.info(f"Localisation détectée : Pays={pays}")
+        #logging.info(f"Localisation détectée : Pays={pays}")
         return pays
     except Exception as e:
         logging.error(f"Impossible de récupérer la localisation de l'IP: {e}")
@@ -141,13 +141,14 @@ def recuperer_prix_amazon_selenium(url, headers):
             continuer_button = wait.until(
                 EC.element_to_be_clickable((By.XPATH, "//button[text()='Continuer les achats']"))
             )
-            logging.info("Page 'Continuer' détectée. Clic...")
+            #logging.info("Page 'Continuer' détectée. Clic...")
             continuer_button.click()
             # Attendre que la page produit soit chargée après le clic
             wait.until(EC.presence_of_element_located((By.ID, "dp-container")))
-            logging.info("Page produit chargée après le clic sur 'Continuer'.")
+            #logging.info("Page produit chargée après le clic sur 'Continuer'.")
         except Exception:
-            logging.info("Pas de page 'Continuer' visible.")
+            #logging.info("Pas de page 'Continuer' visible.")
+            pass
 
         # ÉTAPE 3 : FORCER LA LOCALISATION SI NÉCESSAIRE
         pays_actuel = obtenir_localisation_ip()
@@ -167,19 +168,21 @@ def recuperer_prix_amazon_selenium(url, headers):
 
                 # Attendre que la popup se ferme et que la page se mette à jour
                 wait.until(EC.staleness_of(bouton_actualiser))
-                logging.info("Localisation française forcée avec succès.")
+                #logging.info("Localisation française forcée avec succès.")
             except Exception as e:
-                logging.warning(f"La procédure de forçage de localisation a échoué : {e}")
+                logging.error(f"La procédure de forçage de localisation a échoué : {e}")
         else:
-            logging.info("IP française, pas de forçage de localisation.")
+            #logging.info("IP française, pas de forçage de localisation.")
+            pass
 
         # ÉTAPE 4 : GÉRER LA BANNIÈRE DE COOKIES
         try:
             bouton_cookies = wait.until(EC.element_to_be_clickable((By.ID, "sp-cc-accept")))
-            logging.info("Bannière de cookies trouvée. Clic...")
+            #logging.info("Bannière de cookies trouvée. Clic...")
             bouton_cookies.click()
         except Exception:
-            logging.info("Pas de bannière de cookies visible.")
+            #logging.info("Pas de bannière de cookies visible.")
+            pass
             
         # ÉTAPE 5 : RÉCUPÉRER LE PRIX
         # On attend qu'un conteneur de prix soit visible
@@ -248,40 +251,59 @@ def recuperer_prix_standard(url, selecteur, headers):
         return None
     
 # Fonction pour envoyer un email d'alerte
-def envoyer_email_alerte(nom_set, nouveau_prix, site, url):
-    sujet = f"Alerte Baisse de Prix LEGO : {nom_set}"
-    corps = f"Le prix du set LEGO '{nom_set}' a baissé sur {site} !\n\nNouveau prix : {nouveau_prix}€\n\nLien : {url}"
+def envoyer_email_recapitulatif(baisses_de_prix):
+    """Prend une liste de baisses de prix et envoie un seul email de résumé."""
+    
+    nombre_baisses = len(baisses_de_prix)
+    sujet = f"Alerte Prix LEGO : {nombre_baisses} baisse(s) de prix détectée(s) !"
+    
+    # On construit le corps de l'email en listant chaque baisse de prix
+    details_baisses = []
+    for deal in baisses_de_prix:
+        detail_str = (
+            f" {deal['nom_set']}\n"
+            f"   Site: {deal['site']}\n"
+            f"   Ancien Prix: {deal['prix_precedent']}€\n"
+            f"   NOUVEAU PRIX: {deal['nouveau_prix']}€\n" # On met en avant le nouveau prix
+            f"   Lien: {deal['url']}"
+        )
+        details_baisses.append(detail_str)
+    
+    # On assemble le tout
+    corps = "Bonjour,\n\nVoici les baisses de prix détectées aujourd'hui :\n\n" + "\n\n--------------------\n\n".join(details_baisses)
+    
+    # La partie envoi reste la même
     msg = MIMEText(corps)
     msg['Subject'] = sujet
     msg['From'] = EMAIL_ADRESSE
     msg['To'] = EMAIL_DESTINATAIRE
     try:
-        # On se connecte au serveur SMTP de Gmail sur le port 587
         with smtplib.SMTP('smtp.gmail.com', 587) as smtp_server:
-            # On active le chiffrement TLS
             smtp_server.starttls()
-            # On s'identifie
             smtp_server.login(EMAIL_ADRESSE, EMAIL_MOT_DE_PASSE)
-            # On envoie l'email
             smtp_server.sendmail(EMAIL_ADRESSE, EMAIL_DESTINATAIRE, msg.as_string())
-        logging.info(f"Email d'alerte envoyé pour {nom_set} !")
+        logging.info(f"Email récapitulatif de {nombre_baisses} baisse(s) envoyé !")
     except Exception as e:
-        logging.error(f"Erreur lors de l'envoi de l'email : {e}")
+        logging.error(f"Erreur lors de l'envoi de l'email récapitulatif : {e}")
 
 # Fonction principale pour vérifier les prix
 def verifier_les_prix():
-    #logging.info(f"\nLancement de la vérification des prix - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    #logging.info("Lancement de la vérification des prix")
     try:
         df = pd.read_excel(FICHIER_EXCEL, dtype={'ID_Set': str})
     except FileNotFoundError:
         #logging.info("Fichier Excel non trouvé. Création d'un nouveau fichier.")
         df = pd.DataFrame({'Date': pd.Series(dtype='str'),'ID_Set': pd.Series(dtype='str'),'Nom_Set': pd.Series(dtype='str'),'Site': pd.Series(dtype='str'),'Prix': pd.Series(dtype='float')})
+    
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept-Language': 'fr-FR,fr;q=0.9' # <-- LA LIGNE CLÉ !
+        'Accept-Language': 'fr-FR,fr;q=0.9'
     }
+    
     lignes_a_ajouter = []
-    # On crée un dictionnaire qui associe un type à une fonction
+    baisses_de_prix_a_notifier = []
+
+    # Le dictionnaire de scrapers
     SCRAPERS = {
         "amazon": recuperer_prix_amazon_selenium,
         "standard": recuperer_prix_standard
@@ -294,40 +316,48 @@ def verifier_les_prix():
 
             scraper_type = site_info.get('type')
             scraper_function = SCRAPERS.get(scraper_type)
-
             prix_actuel = None
             if scraper_function:
                 args = [site_info['url'], headers]
                 if scraper_type == 'standard':
                     args.insert(1, site_info['selecteur']) 
                 prix_actuel = scraper_function(*args)
-            else:
-                logging.error(f"  -> ERREUR: Type de scraper inconnu '{scraper_type}'")
-
+            
             if prix_actuel is None:
-                logging.warning(f"Prix non trouvé.")
+                logging.warning("Prix non trouvé.")
                 continue
+            
             logging.info(f"Prix actuel : {prix_actuel}€")
             df_filtre = df[(df['ID_Set'] == str(set_id)) & (df['Site'] == site)]
             prix_precedent = df_filtre['Prix'].iloc[-1] if not df_filtre.empty else None
+            
             if prix_precedent is None or abs(prix_actuel - prix_precedent) > 0.01:
-                logging.info(f"  -> Changement de prix détecté (précédent : {prix_precedent}€). Enregistrement...")
+                logging.info(f"Changement de prix détecté (précédent : {prix_precedent}€). Enregistrement...")
                 nouvelle_ligne = {'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'ID_Set': str(set_id), 'Nom_Set': nom_set, 'Site': site, 'Prix': prix_actuel}
                 lignes_a_ajouter.append(nouvelle_ligne)
+                
                 if prix_precedent is not None and prix_actuel < prix_precedent:
-                    logging.info("BAISSE DE PRIX ! Envoi de l'alerte...")
-                    envoyer_email_alerte(nom_set, prix_actuel, site, site_info['url'])
+                    logging.info("BAISSE DE PRIX ! Ajout à la liste de notification.")
+                    # Au lieu d'envoyer un email, on ajoute les infos au panier
+                    baisses_de_prix_a_notifier.append({
+                        'nom_set': nom_set,
+                        'nouveau_prix': prix_actuel,
+                        'prix_precedent': prix_precedent,
+                        'site': site,
+                        'url': site_info['url']
+                    })
             else:
                 logging.info("Pas de changement de prix.")
             time.sleep(5)
+
+    if baisses_de_prix_a_notifier:
+        envoyer_email_recapitulatif(baisses_de_prix_a_notifier)
+
     if lignes_a_ajouter:
         df_a_ajouter = pd.DataFrame(lignes_a_ajouter)
         df = pd.concat([df, df_a_ajouter], ignore_index=True)
-        
-        # S'assurer que les types de données sont corrects avant de sauvegarder
         df['ID_Set'] = df['ID_Set'].astype(str)
         df['Prix'] = df['Prix'].astype(float)
-        
         df.to_excel(FICHIER_EXCEL, index=False)
         logging.info(f"{len(lignes_a_ajouter)} modifications enregistrées dans le fichier Excel.")
 
