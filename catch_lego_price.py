@@ -26,10 +26,23 @@ logging.basicConfig(
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-CONFIG_SITES = {
+'''
+    "KingJouet": { 
+        "type": "standard_selenium", 
+        "selecteur": ".prix" 
+    }
+
+    "Fnac": {
+        "type": "standard_selenium", 
+        "selecteur": ".f-faPriceBox__price.userPrice" 
+    },
+'''
+
+CONFIG_SITES = {   
     "Amazon": {
         "type": "amazon_selenium",
-        "selecteur": None
+        "selecteur": None,
+        "timeout": 15 # On donne plus de temps à Amazon
     },
     "Lego": {
         "type": "standard",
@@ -48,9 +61,24 @@ CONFIG_SITES = {
         "selecteur": { 
             "euros": ".product-price__content.c-text--size-m",
             "centimes": ".product-price__content.c-text--size-s"
-        }
+        },
+        "timeout": 10
     }
 }
+
+def regrouper_taches_par_site(sets_a_surveiller):
+    taches_par_site = {}
+    for set_id, set_info in sets_a_surveiller.items():
+        nom_set = set_info['nom']
+        for site, site_details in set_info['sites'].items():
+            if site not in taches_par_site:
+                taches_par_site[site] = []
+            
+            tache = site_details.copy()
+            tache['id_set'] = set_id
+            tache['nom_set'] = nom_set
+            taches_par_site[site].append(tache)
+    return taches_par_site
 
 # Lecture de la configuration des sets
 def charger_configuration_sets(fichier_config, config_sites):
@@ -118,86 +146,67 @@ def obtenir_localisation_ip():
     except Exception as e:
         logging.error(f"Impossible de récupérer la localisation de l'IP: {e}")
         return None
-
-def recuperer_prix_amazon_selenium(url, headers):
-    """
-    Fonction complète et robuste pour scraper un prix sur Amazon.
-    Séquence :
-    1. Gère la page bloquante "Continuer".
-    2. Gère la localisation si l'IP n'est pas française.
-    3. Gère la bannière de cookies.
-    4. Récupère le prix.
-    """
-    logging.info("Utilisation de la méthode Selenium pour Amazon...")
+    
+def creer_driver_selenium(scraper_type="standard"):
+    """Crée et retourne une instance configurée du driver Chrome."""
+    logging.info(f"Création d'un driver Selenium (type: {scraper_type})")
     chrome_options = Options()
-    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument(f"user-agent={headers['User-Agent']}")
-    chrome_options.add_argument(f"accept-language={headers['Accept-Language']}")
+    
+    # Options de camouflage les plus importantes
+    chrome_options.add_argument("--disable-gpu") # Crucial dans les environnements sans GPU (comme GitHub Actions)
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled") # Masque le fait que le navigateur est contrôlé par un automate
+    
+    # Options expérimentales pour paraître plus humain
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
     
     driver = webdriver.Chrome(options=chrome_options)
+
+    if scraper_type == "standard_selenium":
+        stealth(driver, languages=["fr-FR", "fr"], vendor="Google Inc.", platform="Win32", webgl_vendor="Intel Inc.", renderer="Intel Iris OpenGL Engine", fix_hairline=True)
+                
+    return driver
+
+def scrape_amazon_avec_driver(driver, url):
+    """
+    Prend un driver Selenium déjà ouvert et scrape une seule page produit Amazon.
+    Gère la localisation, les popups 'Continuer' et les cookies.
+    """
     wait = WebDriverWait(driver, 10)
     
     try:
-        # ÉTAPE 1 : ALLER SUR LA PAGE PRODUIT
+        # On navigue vers l'URL du produit
         driver.get(url)
 
-        # ÉTAPE 2 : GÉRER LA PAGE BLOQUANTE "CONTINUER" EN PRIORITÉ
+        # Gérer la page bloquante "Continuer" si elle apparaît
         try:
             continuer_button = wait.until(
                 EC.element_to_be_clickable((By.XPATH, "//button[text()='Continuer les achats']"))
             )
-            #logging.info("Page 'Continuer' détectée. Clic...")
+            logging.info("  -> Page 'Continuer' détectée. Clic...")
             continuer_button.click()
-            # Attendre que la page produit soit chargée après le clic
             wait.until(EC.presence_of_element_located((By.ID, "dp-container")))
-            #logging.info("Page produit chargée après le clic sur 'Continuer'.")
         except Exception:
-            #logging.info("Pas de page 'Continuer' visible.")
-            pass
+            logging.info("  -> Pas de page 'Continuer' visible.")
 
-        # ÉTAPE 3 : FORCER LA LOCALISATION SI NÉCESSAIRE
-        pays_actuel = obtenir_localisation_ip()
-        if pays_actuel and pays_actuel != 'FR':
-            logging.info(f"IP non-française ({pays_actuel}) détectée. Forçage de la localisation...")
-            try:
-                bouton_localisation = wait.until(
-                    EC.element_to_be_clickable((By.ID, "nav-global-location-popover-link"))
-                )
-                bouton_localisation.click()
-                
-                champ_postal = wait.until(EC.visibility_of_element_located((By.ID, "GLUXZipUpdateInput")))
-                champ_postal.send_keys("38540")
-                
-                bouton_actualiser = driver.find_element(By.CSS_SELECTOR, '[data-action="GLUXPostalUpdateAction"] input')
-                bouton_actualiser.click()
-
-                # Attendre que la popup se ferme et que la page se mette à jour
-                wait.until(EC.staleness_of(bouton_actualiser))
-                #logging.info("Localisation française forcée avec succès.")
-            except Exception as e:
-                logging.error(f"La procédure de forçage de localisation a échoué : {e}")
-        else:
-            #logging.info("IP française, pas de forçage de localisation.")
-            pass
-
-        # ÉTAPE 4 : GÉRER LA BANNIÈRE DE COOKIES
+        # Gérer la bannière de cookies
         try:
             bouton_cookies = wait.until(EC.element_to_be_clickable((By.ID, "sp-cc-accept")))
-            #logging.info("Bannière de cookies trouvée. Clic...")
+            logging.info("  -> Bannière de cookies trouvée. Clic...")
             bouton_cookies.click()
         except Exception:
-            #logging.info("Pas de bannière de cookies visible.")
-            pass
-            
-        # ÉTAPE 5 : RÉCUPÉRER LE PRIX
-        # On attend qu'un conteneur de prix soit visible
+            logging.info("  -> Pas de bannière de cookies visible.")
+        
+        # Attendre que le bloc du prix soit visible
         wait.until(EC.visibility_of_element_located((By.ID, "corePrice_feature_div")))
         soup = BeautifulSoup(driver.page_source, 'html.parser')
         
-        # Plan A : Chercher le prix dans la balise la plus fiable
+        # Plan A : Chercher le prix dans la balise la plus fiable (a-offscreen)
         element_prix = soup.select_one("span.a-offscreen")
         if element_prix:
             prix_texte_brut = element_prix.get_text()
@@ -205,7 +214,7 @@ def recuperer_prix_amazon_selenium(url, headers):
             if match:
                 return float(match.group(1).replace(',', '.'))
         
-        # Plan B : Si la première méthode échoue
+        # Plan B : Si la première méthode échoue (prix éclaté)
         partie_entiere_elem = soup.select_one("span.a-price-whole")
         partie_fraction_elem = soup.select_one("span.a-price-fraction")
         if partie_entiere_elem and partie_fraction_elem:
@@ -218,58 +227,51 @@ def recuperer_prix_amazon_selenium(url, headers):
         return None
 
     except Exception as e:
-        logging.error(f"Erreur finale avec Selenium pour Amazon ({url}): {e}")
-        driver.save_screenshot("amazon_debug_screenshot.png")
+        logging.error(f"Erreur lors du scraping de l'URL Amazon {url}: {e}")
+        driver.save_screenshot(f"error_amazon_{int(time.time())}.png")
         return None
-    finally:
-        driver.quit()
-
-def recuperer_prix_standard_selenium(url, headers, selecteur):
-    logging.info(f"Utilisation de Selenium STEALTH pour le site : {url}")
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option('useAutomationExtension', False)
     
-    driver = webdriver.Chrome(options=chrome_options)
-    stealth(driver,
-            languages=["fr-FR", "fr"],
-            vendor="Google Inc.",
-            platform="Win32",
-            webgl_vendor="Intel Inc.",
-            renderer="Intel Iris OpenGL Engine",
-            fix_hairline=True,
-            )
-    
+def scrape_standard_stealth_avec_driver(driver, url, selecteur):
+    """
+    Prend un driver Selenium Stealth déjà ouvert et scrape une page standard
+    qui nécessite le mode furtif ET une gestion de cookies (ex: Fnac).
+    """
+    logging.info(f"  -> Scraping (Stealth) de {url}")
     wait = WebDriverWait(driver, 10)
     
     try:
         driver.get(url)
-
+        
+        # === LE SUPER GESTIONNAIRE DE COOKIES (identique à celui de Carrefour) ===
         try:
-            xpath_cookies = "//button[contains(text(), 'Tout accepter')] | //button[contains(text(), 'accepter et fermer')] | //button[@id='onetrust-accept-btn-handler']"
+            # On cherche tous les boutons possibles en une seule fois
+            xpath_cookies = (
+                "//button[contains(text(), 'Tout accepter')]"
+                " | //button[contains(text(), 'Accepter & Fermer')]"
+                " | //button[contains(text(), 'accepter et fermer')]"
+                " | //a[contains(text(), 'Continuer sans accepter')]"
+                " | //button[contains(text(), 'Continuer sans accepter')]"
+                " | //button[@id='onetrust-accept-btn-handler']"
+            )
             bouton_cookies = wait.until(EC.element_to_be_clickable((By.XPATH, xpath_cookies)))
-            logging.info("Bannière de cookies générique trouvée. Clic...")
+            logging.info(f"  -> Bannière de cookies trouvée. Clic sur '{bouton_cookies.text}'...")
             bouton_cookies.click()
             wait.until(EC.invisibility_of_element(bouton_cookies))
         except Exception:
-            logging.info("Pas de bannière de cookies gérée visible.")
-        
-        # Attendre que l'élément du prix soit visible
+            logging.info("  -> Pas de bannière de cookies gérée visible.")
+        # ====================================================================
+
+        # Attendre que le prix soit visible
         wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, selecteur)))
+        
         soup = BeautifulSoup(driver.page_source, 'html.parser')
         element_prix = soup.select_one(selecteur)
         
         if element_prix:
-            # On réutilise notre fonction de nettoyage robuste
+            # Votre logique de nettoyage de prix est correcte
             prix_texte_brut = element_prix.get_text()
-            
             prix_texte_uniforme = prix_texte_brut.replace(',', '.')
             match = re.search(r'\d+\.\d+', prix_texte_uniforme)
-            
             if match:
                 return float(match.group(0))
             else:
@@ -277,35 +279,42 @@ def recuperer_prix_standard_selenium(url, headers, selecteur):
                 if match_entier:
                     return float(match_entier.group(0))
         return None
-
+        
     except Exception as e:
-        logging.error(f"Erreur avec Selenium pour {url}: {e}")
-        driver.save_screenshot(f"error_screenshot_{time.time()}.png") # Prend un screenshot en cas d'erreur
+        logging.error(f"Erreur lors du scraping (Stealth) de {url}: {e}")
+        driver.save_screenshot(f"error_stealth_{int(time.time())}.png")
         return None
-    finally:
-        driver.quit()
-
-def recuperer_prix_eclate_selenium(url, headers, selecteur_euros, selecteur_centimes):
-    """
-    Utilise Selenium pour les sites protégés où le prix est séparé en deux balises.
-    """
-    logging.info(f"Utilisation de Selenium (prix éclaté) pour le site : {url}")
-    chrome_options = Options()
-    # ... (copiez-collez les options de chrome de vos autres fonctions selenium)
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument(f"user-agent={headers['User-Agent']}")
-    chrome_options.add_argument(f"accept-language={headers['Accept-Language']}")
     
-    driver = webdriver.Chrome(options=chrome_options)
-    wait = WebDriverWait(driver, 10)
+# Vérifiez que cette fonction existe aussi dans votre code
+
+def scrape_eclate_avec_driver(driver, url, selecteur_euros, selecteur_centimes, timeout=10):
+    """
+    Prend un driver Selenium déjà ouvert et scrape un prix éclaté (ex: Carrefour).
+    Gère la bannière de cookies avant de chercher le prix.
+    """
+    logging.info(f"  -> Scraping (prix éclaté) de {url}")
+    wait = WebDriverWait(driver, timeout)
     
     try:
         driver.get(url)
         
-        # Attendre que les deux parties du prix soient visibles
+        # === GESTIONNAIRE DE COOKIES MIS À JOUR ===
+        try:
+            xpath_cookies = (
+                "//button[contains(text(), 'Tout accepter')]"
+                " | //button[contains(text(), 'Accepter & Fermer')]"
+                " | //button[contains(text(), 'accepter et fermer')]"
+                " | //a[contains(text(), 'Continuer sans accepter')]"  # <-- AJOUT POUR CARREFOUR (souvent un lien <a>)
+                " | //button[contains(text(), 'Continuer sans accepter')]" # <-- Ou parfois un bouton <button>
+                " | //button[@id='onetrust-accept-btn-handler']"
+            )
+            bouton_cookies = wait.until(EC.element_to_be_clickable((By.XPATH, xpath_cookies)))
+            logging.info(f"  -> Bannière de cookies trouvée. Clic sur '{bouton_cookies.text}'...")
+            bouton_cookies.click()
+            wait.until(EC.invisibility_of_element(bouton_cookies))
+        except Exception:
+            logging.info("  -> Pas de bannière de cookies gérée visible.")
+        
         wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, selecteur_euros)))
         wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, selecteur_centimes)))
         
@@ -322,11 +331,9 @@ def recuperer_prix_eclate_selenium(url, headers, selecteur_euros, selecteur_cent
         return None
 
     except Exception as e:
-        logging.error(f"Erreur avec Selenium (prix éclaté) pour {url}: {e}")
-        driver.save_screenshot(f"error_screenshot_eclate_{time.time()}.png")
+        logging.error(f"Erreur lors du scraping (prix éclaté) de {url}: {e}")
+        driver.save_screenshot(f"error_eclate_{int(time.time())}.png")
         return None
-    finally:
-        driver.quit()
 
 def recuperer_prix_standard(url, headers, selecteur):
     try:
@@ -398,13 +405,12 @@ def envoyer_email_recapitulatif(baisses_de_prix):
     except Exception as e:
         logging.error(f"Erreur lors de l'envoi de l'email récapitulatif : {e}")
 
-# Fonction principale pour vérifier les prix
 def verifier_les_prix():
-    #logging.info("Lancement de la vérification des prix")
+    logging.info("Lancement de la vérification des prix")
     try:
         df = pd.read_excel(FICHIER_EXCEL, dtype={'ID_Set': str})
     except FileNotFoundError:
-        #logging.info("Fichier Excel non trouvé. Création d'un nouveau fichier.")
+        logging.info("Fichier Excel d'historique non trouvé. Création d'un nouveau.")
         df = pd.DataFrame({'Date': pd.Series(dtype='str'),'ID_Set': pd.Series(dtype='str'),'Nom_Set': pd.Series(dtype='str'),'Site': pd.Series(dtype='str'),'Prix': pd.Series(dtype='float')})
     
     headers = {
@@ -415,68 +421,110 @@ def verifier_les_prix():
     lignes_a_ajouter = []
     baisses_de_prix_a_notifier = []
 
-    # Le dictionnaire de scrapers
-    SCRAPERS = {
-        "amazon_selenium": recuperer_prix_amazon_selenium,
-        "standard_selenium": recuperer_prix_standard_selenium,
-        "eclate_selenium": recuperer_prix_eclate_selenium, # <--- AJOUT
-        "standard": recuperer_prix_standard
+    # On regroupe toutes les URL à scraper par site
+    taches_par_site = regrouper_taches_par_site(SETS_A_SURVEILLER)
+
+    # Dictionnaire des fonctions de scraping "internes"
+    SCRAPERS_INTERNES = {
+        "amazon_selenium": scrape_amazon_avec_driver,
+        "standard_selenium": scrape_standard_stealth_avec_driver,
+        "eclate_selenium": scrape_eclate_avec_driver,
+        "standard": recuperer_prix_standard # Seule fonction qui n'a pas besoin de driver
     }
 
-    for set_id, set_info in SETS_A_SURVEILLER.items():
-        nom_set = set_info['nom']
-        for site, site_info in set_info['sites'].items():
-            logging.info(f"Vérification de '{nom_set}' sur {site}...")
+    # On boucle sur chaque SITE
+    for site, taches in taches_par_site.items():
+        logging.info(f"--- Début du traitement pour le site : {site} ---")
+        
+        site_config = CONFIG_SITES.get(site.replace('.', '_'))
+        if not site_config:
+            logging.error(f"Configuration manquante pour le site {site}")
+            continue
+        
+        scraper_type = site_config['type']
+        scraper_function = SCRAPERS_INTERNES.get(scraper_type)
 
-            scraper_type = site_info.get('type')
-            scraper_function = SCRAPERS.get(scraper_type)
+        if not scraper_function:
+            logging.error(f"Aucune fonction de scraping trouvée pour le type '{scraper_type}'")
+            continue
+
+        driver = None
+        # On ne démarre un navigateur que si c'est un type Selenium
+        if "selenium" in scraper_type:
+            try:
+                driver = creer_driver_selenium(scraper_type)
+
+                if scraper_type == "standard_selenium":
+                    stealth(driver, languages=["fr-FR", "fr"], vendor="Google Inc.", platform="Win32", webgl_vendor="Intel Inc.", renderer="Intel Iris OpenGL Engine", fix_hairline=True)
+                
+                # Logique de localisation pour Amazon, faite une seule fois par session
+                if scraper_type == "amazon_selenium":
+                    pays_actuel = obtenir_localisation_ip()
+                    if pays_actuel and pays_actuel != 'FR':
+                        # ... (copiez-collez ici votre bloc complet de forçage de localisation)
+                        logging.info(f"IP non-française ({pays_actuel}) détectée. Forçage de la localisation...")
+                        driver.get("https://www.amazon.fr/")
+                        # ... (clics sur le bouton, code postal, etc.)
+            except Exception as e:
+                logging.error(f"Impossible de démarrer Selenium pour {site}: {e}")
+                if driver: driver.quit()
+                continue
+
+        # On boucle sur chaque URL de ce site
+        for tache in taches:
+            logging.info(f"Vérification de '{tache['nom_set']}'...")
             prix_actuel = None
-            if scraper_function:
-                # 1. On prépare les arguments communs à TOUTES les fonctions
-                args = [site_info['url'], headers]
-                
-                # 2. On ajoute les arguments spécifiques à la FIN de la liste
-                if scraper_type == 'standard' or scraper_type == 'standard_selenium':
-                    args.append(site_info['selecteur'])
-                elif scraper_type == 'eclate_selenium':
-                    args.append(site_info['selecteur']['euros'])
-                    args.append(site_info['selecteur']['centimes'])
-                
-                # 3. On appelle la fonction
-                prix_actuel = scraper_function(*args)
-            else:
-                logging.error(f"ERREUR: Type de scraper inconnu '{scraper_type}'")
             
+            try:
+                # On prépare les arguments sous forme de dictionnaire
+                kwargs = {'url': tache['url']}
+                if "selenium" in scraper_type:
+                    kwargs['driver'] = driver
+                else:
+                    kwargs['headers'] = headers
+
+                if scraper_type in ['standard', 'standard_selenium']:
+                    kwargs['selecteur'] = tache['selecteur']
+                elif scraper_type == 'eclate_selenium':
+                    kwargs.update(tache['selecteur']) # Ajoute 'euros' et 'centimes' au dictionnaire
+
+                prix_actuel = scraper_function(**kwargs) # On dépaquette le dictionnaire
+
+            except Exception as e:
+                logging.error(f"Erreur inattendue lors du scraping de {tache['url']}: {e}")
+
+            # === Bloc de comparaison et d'ajout aux listes (INCHANGÉ) ===
             if prix_actuel is None:
                 logging.warning("Prix non trouvé.")
                 continue
             
             logging.info(f"Prix actuel : {prix_actuel}€")
-            df_filtre = df[(df['ID_Set'] == str(set_id)) & (df['Site'] == site)]
+            df_filtre = df[(df['ID_Set'] == tache['id_set']) & (df['Site'] == site)]
             prix_precedent = df_filtre['Prix'].iloc[-1] if not df_filtre.empty else None
             
             if prix_precedent is None or abs(prix_actuel - prix_precedent) > 0.01:
                 logging.info(f"Changement de prix détecté (précédent : {prix_precedent}€). Enregistrement...")
-                nouvelle_ligne = {'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'ID_Set': str(set_id), 'Nom_Set': nom_set, 'Site': site, 'Prix': prix_actuel}
+                nouvelle_ligne = {'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'ID_Set': tache['id_set'], 'Nom_Set': tache['nom_set'], 'Site': site, 'Prix': prix_actuel}
                 lignes_a_ajouter.append(nouvelle_ligne)
                 
                 if prix_precedent is not None and prix_actuel < prix_precedent:
                     logging.info("BAISSE DE PRIX ! Ajout à la liste de notification.")
-                    # Au lieu d'envoyer un email, on ajoute les infos au panier
                     baisses_de_prix_a_notifier.append({
-                        'nom_set': nom_set,
-                        'nouveau_prix': prix_actuel,
-                        'prix_precedent': prix_precedent,
-                        'site': site,
-                        'url': site_info['url']
+                        'nom_set': tache['nom_set'], 'nouveau_prix': prix_actuel,
+                        'prix_precedent': prix_precedent, 'site': site, 'url': tache['url']
                     })
             else:
                 logging.info("Pas de changement de prix.")
             time.sleep(5)
+        
+        # On ferme le navigateur après avoir traité toutes les URL de ce site
+        if driver:
+            logging.info(f"Fermeture de la session Selenium pour {site}")
+            driver.quit()
 
+    # Le reste de la fonction est inchangé (envoi de l'email et sauvegarde)
     if baisses_de_prix_a_notifier:
         envoyer_email_recapitulatif(baisses_de_prix_a_notifier)
-
     if lignes_a_ajouter:
         df_a_ajouter = pd.DataFrame(lignes_a_ajouter)
         df = pd.concat([df, df_a_ajouter], ignore_index=True)
