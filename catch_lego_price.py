@@ -97,8 +97,30 @@ if not all([EMAIL_ADRESSE, EMAIL_MOT_DE_PASSE, EMAIL_DESTINATAIRE]):
     logging.error("Erreur: Les secrets pour l'email (GMAIL_ADDRESS, GMAIL_APP_PASSWORD, MAIL_DESTINATAIRE) ne sont pas configurés.")
     exit()
 
-# Fonction pour récupérer le prix sur Amazon avec Selenium
+def obtenir_localisation_ip():
+    """Interroge un service externe pour connaître la localisation de l'IP actuelle."""
+    try:
+        logging.info("Récupération de la localisation de l'IP...")
+        reponse = requests.get("https://ipinfo.io/json", timeout=5)
+        reponse.raise_for_status()
+        data = reponse.json()
+        pays = data.get('country', 'N/A')
+        logging.info(f"Localisation détectée : Pays={pays}")
+        return pays
+    except Exception as e:
+        logging.error(f"Impossible de récupérer la localisation de l'IP: {e}")
+        return None
+
 def recuperer_prix_amazon_selenium(url, headers):
+    """
+    Fonction complète et robuste pour scraper un prix sur Amazon.
+    Séquence :
+    1. Gère la page bloquante "Continuer".
+    2. Gère la localisation si l'IP n'est pas française.
+    3. Gère la bannière de cookies.
+    4. Récupère le prix.
+    """
+    logging.info("Utilisation de la méthode Selenium pour Amazon...")
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
@@ -111,43 +133,77 @@ def recuperer_prix_amazon_selenium(url, headers):
     wait = WebDriverWait(driver, 10)
     
     try:
-        driver.get("https://www.amazon.fr/")
-        cookie = {'name': 'sp-cdn', 'value': '"L5Z9:FR"'}
-        driver.add_cookie(cookie)
+        # ÉTAPE 1 : ALLER SUR LA PAGE PRODUIT
         driver.get(url)
 
-        # 1. Gérer la page 'Continuer'
+        # ÉTAPE 2 : GÉRER LA PAGE BLOQUANTE "CONTINUER" EN PRIORITÉ
         try:
             continuer_button = wait.until(
                 EC.element_to_be_clickable((By.XPATH, "//button[text()='Continuer les achats']"))
             )
+            logging.info("Page 'Continuer' détectée. Clic...")
             continuer_button.click()
-            wait.until(EC.staleness_of(continuer_button)) 
+            # Attendre que la page produit soit chargée après le clic
+            wait.until(EC.presence_of_element_located((By.ID, "dp-container")))
+            logging.info("Page produit chargée après le clic sur 'Continuer'.")
         except Exception:
-            pass
+            logging.info("Pas de page 'Continuer' visible.")
 
-        # 2. Gérer la bannière de cookies
+        # ÉTAPE 3 : FORCER LA LOCALISATION SI NÉCESSAIRE
+        pays_actuel = obtenir_localisation_ip()
+        if pays_actuel and pays_actuel != 'FR':
+            logging.info(f"IP non-française ({pays_actuel}) détectée. Forçage de la localisation...")
+            try:
+                bouton_localisation = wait.until(
+                    EC.element_to_be_clickable((By.ID, "nav-global-location-popover-link"))
+                )
+                bouton_localisation.click()
+                
+                champ_postal = wait.until(EC.visibility_of_element_located((By.ID, "GLUXZipUpdateInput")))
+                champ_postal.send_keys("38540")
+                
+                bouton_actualiser = driver.find_element(By.CSS_SELECTOR, '[data-action="GLUXPostalUpdateAction"] input')
+                bouton_actualiser.click()
+
+                # Attendre que la popup se ferme et que la page se mette à jour
+                wait.until(EC.staleness_of(bouton_actualiser))
+                logging.info("Localisation française forcée avec succès.")
+            except Exception as e:
+                logging.warning(f"La procédure de forçage de localisation a échoué : {e}")
+        else:
+            logging.info("IP française, pas de forçage de localisation.")
+
+        # ÉTAPE 4 : GÉRER LA BANNIÈRE DE COOKIES
         try:
-            bouton_cookies = wait.until(
-                EC.element_to_be_clickable((By.ID, "sp-cc-accept"))
-            )
+            bouton_cookies = wait.until(EC.element_to_be_clickable((By.ID, "sp-cc-accept")))
+            logging.info("Bannière de cookies trouvée. Clic...")
             bouton_cookies.click()
-            wait.until(EC.invisibility_of_element(bouton_cookies))
         except Exception:
-            pass
-
-        # 3. Attendre l'élément final du prix
-        wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "span.a-price-whole")))
+            logging.info("Pas de bannière de cookies visible.")
+            
+        # ÉTAPE 5 : RÉCUPÉRER LE PRIX
+        # On attend qu'un conteneur de prix soit visible
+        wait.until(EC.visibility_of_element_located((By.ID, "corePrice_feature_div")))
         soup = BeautifulSoup(driver.page_source, 'html.parser')
+        
+        # Plan A : Chercher le prix dans la balise la plus fiable
+        element_prix = soup.select_one("span.a-offscreen")
+        if element_prix:
+            prix_texte_brut = element_prix.get_text()
+            match = re.search(r'(\d+[.,]\d{1,2})', prix_texte_brut)
+            if match:
+                return float(match.group(1).replace(',', '.'))
+        
+        # Plan B : Si la première méthode échoue
         partie_entiere_elem = soup.select_one("span.a-price-whole")
         partie_fraction_elem = soup.select_one("span.a-price-fraction")
-        
         if partie_entiere_elem and partie_fraction_elem:
             partie_entiere_texte = partie_entiere_elem.get_text()
             partie_fraction_texte = partie_fraction_elem.get_text(strip=True)
             partie_entiere_propre = "".join(filter(str.isdigit, partie_entiere_texte))
             prix_complet_str = f"{partie_entiere_propre}.{partie_fraction_texte}"
             return float(prix_complet_str)
+            
         return None
 
     except Exception as e:
@@ -190,29 +246,7 @@ def recuperer_prix_standard(url, selecteur, headers):
     except Exception as e:
         logging.error(f"Erreur en récupérant le prix pour {url}: {e}")
         return None
-
-# Fonction pour obtenir la localisation de l'IP actuelle
-def obtenir_localisation_ip():
-    """Interroge un service externe pour connaître la localisation de l'IP actuelle."""
-    try:
-        logging.info("Tentative de récupération de la localisation de l'IP...")
-        # ipinfo.io/json renvoie des informations sur l'IP qui fait la requête
-        reponse = requests.get("https://ipinfo.io/json", timeout=5)
-        reponse.raise_for_status()
-        
-        data = reponse.json()
-        ip = data.get('ip', 'N/A')
-        pays = data.get('country', 'N/A')
-        region = data.get('region', 'N/A')
-        ville = data.get('city', 'N/A')
-        
-        logging.info(f"Localisation détectée : IP={ip}, Pays={pays}, Région={region}, Ville={ville}")
-        return pays # On renvoie le code pays, ex: "DE", "IE", "NL"
-        
-    except Exception as e:
-        logging.error(f"Impossible de récupérer la localisation de l'IP: {e}")
-        return None
-
+    
 # Fonction pour envoyer un email d'alerte
 def envoyer_email_alerte(nom_set, nouveau_prix, site, url):
     sujet = f"Alerte Baisse de Prix LEGO : {nom_set}"
@@ -300,5 +334,5 @@ def verifier_les_prix():
 # Ce bloc garantit que la fonction principale est appelée
 # uniquement lorsque le script est exécuté directement.
 if __name__ == "__main__":
-    obtenir_localisation_ip()
+    #obtenir_localisation_ip()
     verifier_les_prix()
