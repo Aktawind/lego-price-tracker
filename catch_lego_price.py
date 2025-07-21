@@ -16,6 +16,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium_stealth import stealth
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,7 +28,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 CONFIG_SITES = {
     "Amazon": {
-        "type": "amazon",
+        "type": "amazon_selenium",
         "selecteur": None
     },
     "Lego": {
@@ -41,6 +42,13 @@ CONFIG_SITES = {
     "Leclerc": {
         "type": "standard",
         "selecteur": ".egToM .visually-hidden"
+    },
+    "Carrefour": {
+        "type": "eclate_selenium", 
+        "selecteur": { 
+            "euros": ".product-price__content.c-text--size-m",
+            "centimes": ".product-price__content.c-text--size-s"
+        }
     }
 }
 
@@ -216,7 +224,111 @@ def recuperer_prix_amazon_selenium(url, headers):
     finally:
         driver.quit()
 
-def recuperer_prix_standard(url, selecteur, headers):
+def recuperer_prix_standard_selenium(url, headers, selecteur):
+    logging.info(f"Utilisation de Selenium STEALTH pour le site : {url}")
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
+    
+    driver = webdriver.Chrome(options=chrome_options)
+    stealth(driver,
+            languages=["fr-FR", "fr"],
+            vendor="Google Inc.",
+            platform="Win32",
+            webgl_vendor="Intel Inc.",
+            renderer="Intel Iris OpenGL Engine",
+            fix_hairline=True,
+            )
+    
+    wait = WebDriverWait(driver, 10)
+    
+    try:
+        driver.get(url)
+
+        try:
+            xpath_cookies = "//button[contains(text(), 'Tout accepter')] | //button[contains(text(), 'accepter et fermer')] | //button[@id='onetrust-accept-btn-handler']"
+            bouton_cookies = wait.until(EC.element_to_be_clickable((By.XPATH, xpath_cookies)))
+            logging.info("Bannière de cookies générique trouvée. Clic...")
+            bouton_cookies.click()
+            wait.until(EC.invisibility_of_element(bouton_cookies))
+        except Exception:
+            logging.info("Pas de bannière de cookies gérée visible.")
+        
+        # Attendre que l'élément du prix soit visible
+        wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, selecteur)))
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        element_prix = soup.select_one(selecteur)
+        
+        if element_prix:
+            # On réutilise notre fonction de nettoyage robuste
+            prix_texte_brut = element_prix.get_text()
+            
+            prix_texte_uniforme = prix_texte_brut.replace(',', '.')
+            match = re.search(r'\d+\.\d+', prix_texte_uniforme)
+            
+            if match:
+                return float(match.group(0))
+            else:
+                match_entier = re.search(r'\d+', prix_texte_uniforme)
+                if match_entier:
+                    return float(match_entier.group(0))
+        return None
+
+    except Exception as e:
+        logging.error(f"Erreur avec Selenium pour {url}: {e}")
+        driver.save_screenshot(f"error_screenshot_{time.time()}.png") # Prend un screenshot en cas d'erreur
+        return None
+    finally:
+        driver.quit()
+
+def recuperer_prix_eclate_selenium(url, headers, selecteur_euros, selecteur_centimes):
+    """
+    Utilise Selenium pour les sites protégés où le prix est séparé en deux balises.
+    """
+    logging.info(f"Utilisation de Selenium (prix éclaté) pour le site : {url}")
+    chrome_options = Options()
+    # ... (copiez-collez les options de chrome de vos autres fonctions selenium)
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument(f"user-agent={headers['User-Agent']}")
+    chrome_options.add_argument(f"accept-language={headers['Accept-Language']}")
+    
+    driver = webdriver.Chrome(options=chrome_options)
+    wait = WebDriverWait(driver, 10)
+    
+    try:
+        driver.get(url)
+        
+        # Attendre que les deux parties du prix soient visibles
+        wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, selecteur_euros)))
+        wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, selecteur_centimes)))
+        
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        partie_entiere_elem = soup.select_one(selecteur_euros)
+        partie_fraction_elem = soup.select_one(selecteur_centimes)
+        
+        if partie_entiere_elem and partie_fraction_elem:
+            partie_entiere = partie_entiere_elem.get_text(strip=True).replace(',', '').replace('.', '')
+            partie_fraction = partie_fraction_elem.get_text(strip=True).replace(',', '').replace('.', '')
+            
+            prix_complet_str = f"{partie_entiere}.{partie_fraction}"
+            return float(prix_complet_str)
+        return None
+
+    except Exception as e:
+        logging.error(f"Erreur avec Selenium (prix éclaté) pour {url}: {e}")
+        driver.save_screenshot(f"error_screenshot_eclate_{time.time()}.png")
+        return None
+    finally:
+        driver.quit()
+
+def recuperer_prix_standard(url, headers, selecteur):
     try:
         reponse = requests.get(url, headers=headers, verify=False)
         reponse.raise_for_status()
@@ -305,7 +417,9 @@ def verifier_les_prix():
 
     # Le dictionnaire de scrapers
     SCRAPERS = {
-        "amazon": recuperer_prix_amazon_selenium,
+        "amazon_selenium": recuperer_prix_amazon_selenium,
+        "standard_selenium": recuperer_prix_standard_selenium,
+        "eclate_selenium": recuperer_prix_eclate_selenium, # <--- AJOUT
         "standard": recuperer_prix_standard
     }
 
@@ -318,10 +432,20 @@ def verifier_les_prix():
             scraper_function = SCRAPERS.get(scraper_type)
             prix_actuel = None
             if scraper_function:
+                # 1. On prépare les arguments communs à TOUTES les fonctions
                 args = [site_info['url'], headers]
-                if scraper_type == 'standard':
-                    args.insert(1, site_info['selecteur']) 
+                
+                # 2. On ajoute les arguments spécifiques à la FIN de la liste
+                if scraper_type == 'standard' or scraper_type == 'standard_selenium':
+                    args.append(site_info['selecteur'])
+                elif scraper_type == 'eclate_selenium':
+                    args.append(site_info['selecteur']['euros'])
+                    args.append(site_info['selecteur']['centimes'])
+                
+                # 3. On appelle la fonction
                 prix_actuel = scraper_function(*args)
+            else:
+                logging.error(f"ERREUR: Type de scraper inconnu '{scraper_type}'")
             
             if prix_actuel is None:
                 logging.warning("Prix non trouvé.")
