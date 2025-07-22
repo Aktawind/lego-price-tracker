@@ -316,7 +316,7 @@ def scrape_standard_stealth_avec_driver(driver, url, selecteur):
     
 # Vérifiez que cette fonction existe aussi dans votre code
 
-def scrape_eclate_avec_driver(driver, url, selecteur_euros, selecteur_centimes, timeout=10):
+def scrape_eclate_avec_driver(driver, url, euros, centimes, timeout=10):
     """
     Prend un driver Selenium déjà ouvert et scrape un prix éclaté (ex: Carrefour).
     Gère la bannière de cookies avant de chercher le prix.
@@ -327,7 +327,6 @@ def scrape_eclate_avec_driver(driver, url, selecteur_euros, selecteur_centimes, 
     try:
         driver.get(url)
         
-        # === GESTIONNAIRE DE COOKIES MIS À JOUR ===
         try:
             xpath_cookies = (
                 "//button[contains(text(), 'Tout accepter')]"
@@ -344,12 +343,12 @@ def scrape_eclate_avec_driver(driver, url, selecteur_euros, selecteur_centimes, 
         except Exception:
             logging.info("  -> Pas de bannière de cookies gérée visible.")
         
-        wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, selecteur_euros)))
-        wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, selecteur_centimes)))
+        wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, euros)))
+        wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, centimes)))
         
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        partie_entiere_elem = soup.select_one(selecteur_euros)
-        partie_fraction_elem = soup.select_one(selecteur_centimes)
+        partie_entiere_elem = soup.select_one(euros)
+        partie_fraction_elem = soup.select_one(centimes)
         
         if partie_entiere_elem and partie_fraction_elem:
             partie_entiere = partie_entiere_elem.get_text(strip=True).replace(',', '').replace('.', '')
