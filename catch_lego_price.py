@@ -188,21 +188,50 @@ def scrape_amazon_avec_driver(driver, url):
             continuer_button = wait.until(
                 EC.element_to_be_clickable((By.XPATH, "//button[text()='Continuer les achats']"))
             )
-            logging.info("  -> Page 'Continuer' détectée. Clic...")
+            #logging.info("Page 'Continuer' détectée. Clic...")
             continuer_button.click()
+            # Attendre que la page produit soit chargée après le clic
             wait.until(EC.presence_of_element_located((By.ID, "dp-container")))
+            #logging.info("Page produit chargée après le clic sur 'Continuer'.")
         except Exception:
-            logging.info("  -> Pas de page 'Continuer' visible.")
+            #logging.info("Pas de page 'Continuer' visible.")
+            pass
 
-        # Gérer la bannière de cookies
+        # ÉTAPE 3 : FORCER LA LOCALISATION SI NÉCESSAIRE
+        pays_actuel = obtenir_localisation_ip()
+        if pays_actuel and pays_actuel != 'FR':
+            logging.info(f"IP non-française ({pays_actuel}) détectée. Forçage de la localisation...")
+            try:
+                bouton_localisation = wait.until(
+                    EC.element_to_be_clickable((By.ID, "nav-global-location-popover-link"))
+                )
+                bouton_localisation.click()
+                
+                champ_postal = wait.until(EC.visibility_of_element_located((By.ID, "GLUXZipUpdateInput")))
+                champ_postal.send_keys("38540")
+                
+                bouton_actualiser = driver.find_element(By.CSS_SELECTOR, '[data-action="GLUXPostalUpdateAction"] input')
+                bouton_actualiser.click()
+
+                # Attendre que la popup se ferme et que la page se mette à jour
+                wait.until(EC.staleness_of(bouton_actualiser))
+                #logging.info("Localisation française forcée avec succès.")
+            except Exception as e:
+                logging.error(f"La procédure de forçage de localisation a échoué : {e}")
+        else:
+            #logging.info("IP française, pas de forçage de localisation.")
+            pass
+
+        # ÉTAPE 4 : GÉRER LA BANNIÈRE DE COOKIES
         try:
             bouton_cookies = wait.until(EC.element_to_be_clickable((By.ID, "sp-cc-accept")))
-            logging.info("  -> Bannière de cookies trouvée. Clic...")
+            #logging.info("Bannière de cookies trouvée. Clic...")
             bouton_cookies.click()
         except Exception:
-            logging.info("  -> Pas de bannière de cookies visible.")
-        
-        # Attendre que le bloc du prix soit visible
+            #logging.info("Pas de bannière de cookies visible.")
+            pass
+
+        # ÉTAPE 5 : EXTRAIRE LE PRIX
         wait.until(EC.visibility_of_element_located((By.ID, "corePrice_feature_div")))
         soup = BeautifulSoup(driver.page_source, 'html.parser')
         
