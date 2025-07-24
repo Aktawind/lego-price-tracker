@@ -57,4 +57,4 @@ jobs:
         env:
           GIT_USER: "github-actions[bot]"
           GIT_EMAIL: "github-actions[bot]@users.noreply.github.com"
-          WIKI_URL: https://${{ secrets.PAT }}@github.com/${{ github.repository }}.wiki.git
+          WIKI_REPO_URL = os.getenv("WIKI_URL", "https://github.com/Aktawind/lego-price-tracker.wiki.git")
