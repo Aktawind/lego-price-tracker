@@ -142,25 +142,25 @@ def generer_pages_wiki():
             page_detail_content.append(f"- **Seuil Bonne Affaire :** Un prix inférieur à **{seuil_bonne_affaire:.0f}€** est considéré comme un bon deal.")
             page_detail_content.append(f"- **Prix le plus bas enregistré :** {prix_plus_bas_jamais_vu:.2f}€\n")
 
-        page_detail_content.append("## Prix Actuels par Site")
-        page_detail_content.append("| Site | Prix Actuel | Prix par Pièce | Analyse |")
-        page_detail_content.append("|:---|:---:|:---:|:---:|")
+            page_detail_content.append("## Prix Actuels par Site")
+            page_detail_content.append("| Site | Prix Actuel | Prix par Pièce | Analyse |")
+            page_detail_content.append("|:---|:---:|:---:|:---:|")
 
-        for _, row in dernier_scan.iterrows():
-                prix = row['Prix']
-                site = row['Site']
-                
-                analyse_emoji = ""
-                ppp_actuel = prix / nb_pieces
-                
-                if ppp_actuel <= seuil_bonne_affaire / nb_pieces:
-                    analyse_emoji = "Très Bonne Affaire ✅✅"
-                elif ppp_actuel <= prix_moyen_collection:
-                    analyse_emoji = "Bon Prix ✅"
-                else:
-                    analyse_emoji = "Élevé ❌"
+            for _, row in dernier_scan.iterrows():
+                    prix = row['Prix']
+                    site = row['Site']
+                    
+                    analyse_emoji = ""
+                    ppp_actuel = prix / nb_pieces
+                    
+                    if ppp_actuel <= seuil_bonne_affaire / nb_pieces:
+                        analyse_emoji = "Très Bonne Affaire ✅✅"
+                    elif ppp_actuel <= prix_moyen_collection:
+                        analyse_emoji = "Bon Prix ✅"
+                    else:
+                        analyse_emoji = "Élevé ❌"
 
-                page_detail_content.append(f"| {site} | **{prix:.2f}€** | {ppp_actuel:.3f}€ | {analyse_emoji} |")
+                    page_detail_content.append(f"| {site} | **{prix:.2f}€** | {ppp_actuel:.3f}€ | {analyse_emoji} |")
         else:
              # Gérer le cas où on n'a pas les infos de pièces
              page_detail_content.append("\n## Prix Actuels par Site")
@@ -168,6 +168,10 @@ def generer_pages_wiki():
              page_detail_content.append("|:---|:---:|")
              for _, row in dernier_scan.iterrows():
                  page_detail_content.append(f"| {row['Site']} | **{row['Prix']:.2f}€** |")
+
+        chemin_graphique = generer_graphique(df_set_history, id_set)
+        page_detail_content.append("\n## Évolution des prix")
+        page_detail_content.append(f"<img src='./{chemin_graphique}' alt='Graphique des prix' width='700'>\n")
         
         with open(os.path.join(WIKI_LOCAL_PATH, nom_fichier_page), 'w', encoding='utf-8') as f:
             f.write("\n".join(page_detail_content))
