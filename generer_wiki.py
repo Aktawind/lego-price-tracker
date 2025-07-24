@@ -4,6 +4,7 @@ import seaborn as sns
 import os
 import git
 from datetime import datetime
+import re
 
 # --- CONFIGURATION ---
 FICHIER_PRIX = "prix_lego.xlsx"
@@ -75,7 +76,13 @@ def generer_pages_wiki():
         meilleur_prix_actuel = dernier_scan['Prix'].min()
         site_meilleur_prix = dernier_scan[dernier_scan['Prix'] == meilleur_prix_actuel]['Site'].iloc[0]
 
-        nom_fichier_page = f"{id_set}-{nom_set.replace(' ', '-').replace('™', '').replace(':', '').replace('’', '')}.md"
+        # On garde uniquement les lettres, chiffres, et tirets.
+        nom_set_nettoye = re.sub(r'[^a-zA-Z0-9]', '-', nom_set)
+        # On remplace les tirets multiples par un seul
+        nom_set_nettoye = re.sub(r'-+', '-', nom_set_nettoye)
+        
+        nom_fichier_page = f"{id_set}-{nom_set_nettoye}.md"
+        # ==================================
         
         home_content.append(f"## [{nom_set}]({nom_fichier_page.replace(' ', '%20')})")
         home_content.append(f"**Meilleur prix actuel : {meilleur_prix_actuel:.2f}€** sur *{site_meilleur_prix}*")
