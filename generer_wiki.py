@@ -5,6 +5,7 @@ import os
 import git
 from datetime import datetime
 import re
+import urllib.parse
 
 # --- CONFIGURATION ---
 FICHIER_PRIX = "prix_lego.xlsx"
@@ -45,6 +46,8 @@ def generer_graphique(df_set_history, id_set):
     print(f"Graphique généré : {chemin_image}")
     return f"images/graph_{id_set}.png"
 
+# REMPLACEZ VOTRE FONCTION EXISTANTE PAR CELLE-CI
+
 def generer_pages_wiki():
     print("Début de la génération des pages du Wiki...")
     
@@ -58,13 +61,20 @@ def generer_pages_wiki():
 
     preparer_repo_wiki()
 
-    home_content = ["# Suivi des Prix LEGO\n\n", "Mis à jour le : " + datetime.now().strftime('%d/%m/%Y à %H:%M') + "\n"]
+    # === DÉBUT DE LA NOUVELLE LOGIQUE POUR LA PAGE D'ACCUEIL ===
+    home_content = [
+        "# Suivi des Prix LEGO",
+        "Mis à jour le : " + datetime.now().strftime('%d/%m/%Y à %H:%M') + "\n",
+        # En-tête du tableau
+        "| Image | Set | Meilleur Prix Actuel |",
+        "|:---:|:---|:---|" # Alignement des colonnes
+    ]
+    # ==========================================================
     
-    # On boucle directement sur chaque ligne de la configuration
     for index, config_set in df_config.iterrows():
         id_set = config_set['ID_Set']
         nom_set = config_set['Nom_Set']
-        image_url = config_set.get('Image_URL', '') # Utiliser .get pour éviter une erreur si la colonne manque
+        image_url = config_set.get('Image_URL', '')
 
         df_set_history = df_prix[df_prix['ID_Set'] == id_set].copy()
         
@@ -76,26 +86,35 @@ def generer_pages_wiki():
         meilleur_prix_actuel = dernier_scan['Prix'].min()
         site_meilleur_prix = dernier_scan[dernier_scan['Prix'] == meilleur_prix_actuel]['Site'].iloc[0]
 
-        # On garde uniquement les lettres, chiffres, et tirets.
+        # Nettoyage du nom de fichier
         nom_set_nettoye = re.sub(r'[^a-zA-Z0-9]', '-', nom_set)
-        # On remplace les tirets multiples par un seul
-        nom_set_nettoye = re.sub(r'-+', '-', nom_set_nettoye)
-        
+        nom_set_nettoye = re.sub(r'-+', '-', nom_set_nettoye).strip('-')
         nom_fichier_page = f"{id_set}-{nom_set_nettoye}.md"
-        # ==================================
         
-        home_content.append(f"## [{nom_set}]({nom_fichier_page.replace(' ', '%20')})")
-        home_content.append(f"**Meilleur prix actuel : {meilleur_prix_actuel:.2f}€** sur *{site_meilleur_prix}*")
-        if image_url:
-            home_content.append(f"[<img src='{image_url}' width='200' alt='Image de {nom_set}'>]({nom_fichier_page.replace(' ', '%20')})\n")
+        # === CORRECTION DES LIENS AVEC ENCODAGE URL ===
+        lien_encode = urllib.parse.quote(nom_fichier_page)
+        # ============================================
+
+        # === CONSTRUCTION DE LA LIGNE DU TABLEAU POUR LA PAGE D'ACCUEIL ===
+        image_md = f"[<img src='{image_url}' width='100' alt='Image de {nom_set}'>]({lien_encode})" if image_url else "Pas d'image"
+        set_md = f"**[{nom_set}]({lien_encode})**<br>*{id_set}*"
+        prix_md = f"**{meilleur_prix_actuel:.2f}€**<br>*sur {site_meilleur_prix}*"
+        
+        home_content.append(f"| {image_md} | {set_md} | {prix_md} |")
+        # ===============================================================
 
         chemin_graphique_relatif = generer_graphique(df_set_history, id_set)
         
+        # --- Génération des pages de détail avec images redimensionnées ---
         page_detail_content = [f"# {nom_set} ({id_set})\n"]
         if image_url:
-            page_detail_content.append(f"![Image de {nom_set}]({image_url})\n")
+            # === IMAGE REDIMENSIONNÉE AVEC HTML ===
+            page_detail_content.append(f"<img src='{image_url}' alt='Image de {nom_set}' width='400'>\n")
+        
         page_detail_content.append("## Évolution des prix\n")
-        page_detail_content.append(f"![Graphique d'évolution des prix](./{chemin_graphique_relatif})\n")
+        
+        # === GRAPHIQUE REDIMENSIONNÉ AVEC HTML ===
+        page_detail_content.append(f"<img src='./{chemin_graphique_relatif}' alt='Graphique d'évolution des prix' width='700'>\n")
         
         with open(os.path.join(WIKI_LOCAL_PATH, nom_fichier_page), 'w', encoding='utf-8') as f:
             f.write("\n".join(page_detail_content))
