@@ -7,6 +7,7 @@ from datetime import datetime
 import re
 import logging
 import urllib.parse
+from matplotlib.dates import DateFormatter
 
 logging.basicConfig(
     level=logging.INFO,
@@ -57,10 +58,12 @@ def generer_graphique(df_set_history, id_set):
     # Utiliser Seaborn pour un joli graphique
     sns.lineplot(data=df_set_history, x='Date', y='Prix', hue='Site', marker='o', ax=ax)
 
+    date_format = DateFormatter("%d/%m/%Y")
+    ax.xaxis.set_major_formatter(date_format)
     ax.set_title(f"Évolution du prix pour le set {id_set}", fontsize=16)
     ax.set_ylabel("Prix (€)")
     ax.set_xlabel("Date")
-    plt.xticks(rotation=45)
+    plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
     
     chemin_image = os.path.join(WIKI_LOCAL_PATH, "images", f"graph_{id_set}.png")
@@ -114,7 +117,12 @@ def generer_pages_wiki():
         lien_wiki = nom_fichier_page[:-3] # On enlève le .md pour le lien
 
         # --- Page d'accueil ---
-        indicateur_deal = "🟢" if seuil_bonne_affaire and meilleur_prix_actuel <= seuil_bonne_affaire else ""
+        indicateur_deal = ""
+        if seuil_bonne_affaire and meilleur_prix_actuel <= seuil_bonne_affaire:
+            indicateur_deal = "✅✅"
+        elif prix_juste and meilleur_prix_actuel <= prix_juste:
+            indicateur_deal = "✅" 
+
         image_md = f"[<img src='{image_url}' width='100'>]({lien_wiki})" if image_url else ""
         set_md = f"**[{nom_set}]({lien_wiki})**<br>*{id_set}*"
         prix_md = f"**{meilleur_prix_actuel:.2f}€** {indicateur_deal}<br>*sur {site_meilleur_prix}*"
@@ -139,21 +147,27 @@ def generer_pages_wiki():
         page_detail_content.append("|:---|:---:|:---:|:---:|")
 
         for _, row in dernier_scan.iterrows():
-            prix = row['Prix']
-            site = row['Site']
-            analyse_html = ""
-            if prix_juste:
+                prix = row['Prix']
+                site = row['Site']
+                
+                analyse_emoji = ""
                 ppp_actuel = prix / nb_pieces
-                if ppp_actuel <= prix_moyen_collection:
-                    analyse_html = f"<strong><span style='color:green;'>Excellent !</span></strong>"
+                
+                if ppp_actuel <= seuil_bonne_affaire / nb_pieces:
+                    analyse_emoji = "Très Bonne Affaire ✅✅"
+                elif ppp_actuel <= prix_moyen_collection:
+                    analyse_emoji = "Bon Prix ✅"
                 else:
-                    analyse_html = f"<strong><span style='color:red;'>Élevé</span></strong>"
-                page_detail_content.append(f"| {site} | **{prix:.2f}€** | {ppp_actuel:.3f}€ | {analyse_html} |")
-            else:
-                 page_detail_content.append(f"| {site} | **{prix:.2f}€** | - | - |")
-        
-        page_detail_content.append("\n## Évolution des prix")
-        page_detail_content.append(f"<img src='./{chemin_graphique}' alt='Graphique des prix' width='700'>\n")
+                    analyse_emoji = "Élevé ❌"
+
+                page_detail_content.append(f"| {site} | **{prix:.2f}€** | {ppp_actuel:.3f}€ | {analyse_emoji} |")
+        else:
+             # Gérer le cas où on n'a pas les infos de pièces
+             page_detail_content.append("\n## Prix Actuels par Site")
+             page_detail_content.append("| Site | Prix Actuel |")
+             page_detail_content.append("|:---|:---:|")
+             for _, row in dernier_scan.iterrows():
+                 page_detail_content.append(f"| {row['Site']} | **{row['Prix']:.2f}€** |")
         
         with open(os.path.join(WIKI_LOCAL_PATH, nom_fichier_page), 'w', encoding='utf-8') as f:
             f.write("\n".join(page_detail_content))
