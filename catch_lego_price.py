@@ -413,8 +413,13 @@ def envoyer_email_recapitulatif(baisses_de_prix):
         )
         details_baisses.append(detail_str)
     
-    corps = "Bonjour,\n\nVoici les baisses de prix détectées aujourd'hui :\n\n" + "\n\n--------------------\n\n".join(details_baisses)
-    
+    lien_wiki = "https://github.com/Aktawind/lego-price-tracker/wiki"
+    corps = (
+            "Bonjour,\n\n"
+            "Voici les baisses de prix détectées aujourd'hui :\n\n"
+            + "\n\n--------------------\n\n".join(details_baisses)
+            + f"\n\n\nPour une analyse détaillée et l'historique des prix, consultez le tableau de bord :\n{lien_wiki}"
+    )    
     # La partie envoi reste la même
     msg = MIMEText(corps)
     msg['Subject'] = sujet

@@ -138,8 +138,8 @@ def generer_pages_wiki():
             prix_plus_bas_jamais_vu = df_set_history['Prix'].min()
             page_detail_content.append("## Analyse du Prix")
             page_detail_content.append(f"- **Collection :** {collection} ({prix_moyen_collection:.3f}€/pièce)")
-            page_detail_content.append(f"- **Prix 'juste' estimé :** {prix_juste:.2f}€")
-            page_detail_content.append(f"- **Seuil 'Bonne Affaire' :** Un prix inférieur à **{seuil_bonne_affaire:.2f}€** est considéré comme un bon deal.")
+            page_detail_content.append(f"- **Prix juste estimé :** {prix_juste:.0f}€")
+            page_detail_content.append(f"- **Seuil Bonne Affaire :** Un prix inférieur à **{seuil_bonne_affaire:.0f}€** est considéré comme un bon deal.")
             page_detail_content.append(f"- **Prix le plus bas enregistré :** {prix_plus_bas_jamais_vu:.2f}€\n")
 
         page_detail_content.append("## Prix Actuels par Site")
