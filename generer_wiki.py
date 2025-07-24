@@ -79,7 +79,7 @@ def generer_pages_wiki():
     try:
         df_prix = pd.read_excel(FICHIER_PRIX, dtype={'ID_Set': str})
         df_config = pd.read_excel(FICHIER_CONFIG, dtype={'ID_Set': str})
-        df_prix['Date'] = pd.to_datetime(df_prix['Date'])
+        df_prix['Date'] = pd.to_datetime(df_prix['Date']).dt.normalize()
     except FileNotFoundError as e:
         logging.error(f"Erreur: Fichier manquant - {e}")
         return
@@ -113,7 +113,7 @@ def generer_pages_wiki():
         
         # --- Génération des noms de page et liens ---
         nom_set_nettoye = re.sub(r'[^a-zA-Z0-9]', '-', nom_set).strip('-')
-        nom_fichier_page = f"{id_set}-{nom_set_nettoye}.md"
+        nom_fichier_page = f"{id_set}-{nom_set}.md"
         lien_wiki = nom_fichier_page[:-3] # On enlève le .md pour le lien
 
         # --- Page d'accueil ---
@@ -154,11 +154,11 @@ def generer_pages_wiki():
                     ppp_actuel = prix / nb_pieces
                     
                     if ppp_actuel <= seuil_bonne_affaire / nb_pieces:
-                        analyse_emoji = "Très Bonne Affaire ✅✅"
+                        analyse_emoji = "✅✅"
                     elif ppp_actuel <= prix_moyen_collection:
-                        analyse_emoji = "Bon Prix ✅"
+                        analyse_emoji = "✅"
                     else:
-                        analyse_emoji = "Élevé ❌"
+                        analyse_emoji = "❌"
 
                     page_detail_content.append(f"| {site} | **{prix:.2f}€** | {ppp_actuel:.3f}€ | {analyse_emoji} |")
         else:
