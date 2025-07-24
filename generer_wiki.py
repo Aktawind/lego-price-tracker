@@ -35,6 +35,22 @@ FICHIER_CONFIG = "config_sets.xlsx"
 WIKI_REPO_URL = os.getenv("WIKI_URL", "https://github.com/Aktawind/lego-price-tracker.wiki.git")
 WIKI_LOCAL_PATH = "lego_wiki"
 
+# --- Nettoyage du dossier wiki ---
+def nettoyer_dossier_wiki(chemin_dossier):
+    """Supprime tous les fichiers .md et les images de graphiques existants."""
+    logging.info(f"Nettoyage du dossier du wiki : {chemin_dossier}")
+    # Nettoyer les fichiers .md à la racine
+    for fichier in os.listdir(chemin_dossier):
+        if fichier.endswith(".md"):
+            os.remove(os.path.join(chemin_dossier, fichier))
+    
+    # Nettoyer les graphiques dans le dossier images
+    dossier_images = os.path.join(chemin_dossier, "images")
+    if os.path.exists(dossier_images):
+        for fichier in os.listdir(dossier_images):
+            if fichier.startswith("graph_") and fichier.endswith(".png"):
+                os.remove(os.path.join(dossier_images, fichier))
+
 # --- Préparation du chemin local pour le dépôt wiki ---
 def preparer_repo_wiki():
     """Clone le repo du wiki s'il n'existe pas, ou le met à jour."""
@@ -85,6 +101,7 @@ def generer_pages_wiki():
         return
 
     preparer_repo_wiki()
+    nettoyer_dossier_wiki(WIKI_LOCAL_PATH)
 
     home_content = ["# Suivi des Prix LEGO", "Mis à jour le : " + datetime.now().strftime('%d/%m/%Y à %H:%M') + "\n",
                     "| Image | Set | Meilleur Prix Actuel |", "|:---:|:---|:---|"]
@@ -129,8 +146,8 @@ def generer_pages_wiki():
 
         # --- Pages de détail ---
         chemin_graphique = generer_graphique(df_set_history, id_set)
-        page_detail_content = [f"# {nom_set} ({id_set})"]
-        if image_url: page_detail_content.append(f"<img src='{image_url}' alt='Image de {nom_set}' width='400'>\n")
+        #page_detail_content = [f"# {nom_set} ({id_set})"]
+        page_detail_content = [f"<img src='{image_url}' alt='Image de {nom_set}' width='400'>\n"]
         
         # Section d'analyse
         if prix_juste:
