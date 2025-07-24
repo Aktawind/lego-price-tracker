@@ -506,18 +506,20 @@ def verifier_les_prix():
             prix_actuel = None
             
             try:
-                kwargs = {'url': tache['url']}
+                kwargs = {}
                 if "selenium" in scraper_type:
                     kwargs['driver'] = driver
-                else:
+                    kwargs['url'] = tache['url']
+                else: 
+                    kwargs['url'] = tache['url']
                     kwargs['headers'] = headers
 
                 if scraper_type in ['standard', 'standard_selenium']:
                     kwargs['selecteur'] = tache['selecteur']
                 elif scraper_type == 'eclate_selenium':
-                    kwargs.update(tache['selecteur']) # Ajoute 'euros' et 'centimes' au dictionnaire
+                    kwargs.update(tache['selecteur'])
 
-                prix_actuel = scraper_function(**kwargs) # On dépaquette le dictionnaire
+                prix_actuel = scraper_function(**kwargs)
 
             except Exception as e:
                 logging.error(f"Erreur inattendue lors du scraping de {tache['url']}: {e}")
@@ -555,9 +557,12 @@ def verifier_les_prix():
                         logging.warning(f"Impossible de trouver les infos de config pour le set {tache['id_set']} pour l'analyse de 'bonne affaire'.")
 
                     baisses_de_prix_a_notifier.append({
-                        'nom_set': tache['nom_set'], 'nouveau_prix': prix_actuel,
-                        'prix_precedent': prix_precedent, 'site': site, 'url': tache['url']
-                        'bonne_affaire': is_bonne_affaire # On ajoute l'info au panier
+                        'nom_set': tache['nom_set'],
+                        'nouveau_prix': prix_actuel,
+                        'prix_precedent': prix_precedent,
+                        'site': site,
+                        'url': tache['url'],
+                        'bonne_affaire': is_bonne_affaire
                     })
             else:
                 logging.info("Pas de changement de prix.")
