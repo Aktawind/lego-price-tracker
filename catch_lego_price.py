@@ -97,6 +97,19 @@ def charger_configuration_sets(fichier_config, config_sites):
         logging.error(f"Erreur lors de la lecture du fichier de configuration Excel: {e}")
         return None
     
+# Dictionnaire de connaissance des prix moyens par pièce
+PRIX_MOYEN_PAR_COLLECTION = {
+    "Star Wars"  : 0.130,
+    "Technic"    : 0.117,
+    "Disney"     : 0.108,
+    "Super Mario": 0.101,
+    "Ideas"      : 0.096,
+    "Icons"      : 0.092,
+    "Botanicals" : 0.085,
+    "default"    : 0.100
+}
+
+SEUIL_BONNE_AFFAIRE = 0.85 # 15% de réduction par rapport au prix moyen
 SETS_A_SURVEILLER = charger_configuration_sets('config_sets.xlsx', CONFIG_SITES)
 FICHIER_EXCEL = "prix_lego.xlsx"
 EMAIL_ADRESSE = os.getenv('GMAIL_ADDRESS')
@@ -383,19 +396,23 @@ def envoyer_email_recapitulatif(baisses_de_prix):
     nombre_baisses = len(baisses_de_prix)
     sujet = f"Alerte Prix LEGO : {nombre_baisses} baisse(s) de prix détectée(s) !"
     
-    # On construit le corps de l'email en listant chaque baisse de prix
     details_baisses = []
     for deal in baisses_de_prix:
+        # On construit la ligne "Bonne Affaire" uniquement si c'est le cas
+        message_bonne_affaire = ""
+        if deal.get('bonne_affaire', False): # .get() pour éviter une erreur si la clé manque
+            message_bonne_affaire = "\n   >> C'est une bonne affaire ! 🟢"
+            
         detail_str = (
             f" {deal['nom_set']}\n"
             f"   Site: {deal['site']}\n"
             f"   Ancien Prix: {deal['prix_precedent']}€\n"
             f"   NOUVEAU PRIX: {deal['nouveau_prix']}€\n" # On met en avant le nouveau prix
+            f"{message_bonne_affaire}\n" # On insère notre message ici
             f"   Lien: {deal['url']}"
         )
         details_baisses.append(detail_str)
     
-    # On assemble le tout
     corps = "Bonjour,\n\nVoici les baisses de prix détectées aujourd'hui :\n\n" + "\n\n--------------------\n\n".join(details_baisses)
     
     # La partie envoi reste la même
@@ -415,10 +432,10 @@ def envoyer_email_recapitulatif(baisses_de_prix):
 def verifier_les_prix():
     logging.info("Lancement de la vérification des prix")
     try:
-        df = pd.read_excel(FICHIER_EXCEL, dtype={'ID_Set': str})
+        df_historique = pd.read_excel(FICHIER_EXCEL, dtype={'ID_Set': str})
     except FileNotFoundError:
         logging.info("Fichier Excel d'historique non trouvé. Création d'un nouveau.")
-        df = pd.DataFrame({'Date': pd.Series(dtype='str'),'ID_Set': pd.Series(dtype='str'),'Nom_Set': pd.Series(dtype='str'),'Site': pd.Series(dtype='str'),'Prix': pd.Series(dtype='float')})
+        df_historique = pd.DataFrame({'Date': pd.Series(dtype='str'),'ID_Set': pd.Series(dtype='str'),'Nom_Set': pd.Series(dtype='str'),'Site': pd.Series(dtype='str'),'Prix': pd.Series(dtype='float')})
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -428,22 +445,29 @@ def verifier_les_prix():
     lignes_a_ajouter = []
     baisses_de_prix_a_notifier = []
 
-    # On regroupe toutes les URL à scraper par site
     taches_par_site = regrouper_taches_par_site(SETS_A_SURVEILLER)
 
-    # Dictionnaire des fonctions de scraping "internes"
     SCRAPERS_INTERNES = {
         "amazon_selenium": scrape_amazon_avec_driver,
         "standard_selenium": scrape_standard_stealth_avec_driver,
         "eclate_selenium": scrape_eclate_avec_driver,
-        "standard": recuperer_prix_standard # Seule fonction qui n'a pas besoin de driver
+        "standard": recuperer_prix_standard
     }
 
-    # On boucle sur chaque SITE
+    # On charge la configuration une seule fois au début
+    try:
+        df_config = pd.read_excel('config_sets.xlsx', dtype=str)
+    except FileNotFoundError:
+        logging.error("Fichier de configuration 'config_sets.xlsx' introuvable. Arrêt.")
+        return
+
     for site, taches in taches_par_site.items():
         logging.info(f"--- Début du traitement pour le site : {site} ---")
         
-        site_config = CONFIG_SITES.get(site.replace('.', '_'))
+        # On remplace '.' par '_' pour matcher les clés du dictionnaire (ex: Lego.com -> Lego_com)
+        site_key = site.replace('.', '_')
+        site_config = CONFIG_SITES.get(site_key)
+        
         if not site_config:
             logging.error(f"Configuration manquante pour le site {site}")
             continue
@@ -477,13 +501,11 @@ def verifier_les_prix():
                 if driver: driver.quit()
                 continue
 
-        # On boucle sur chaque URL de ce site
         for tache in taches:
             logging.info(f"Vérification de '{tache['nom_set']}'...")
             prix_actuel = None
             
             try:
-                # On prépare les arguments sous forme de dictionnaire
                 kwargs = {'url': tache['url']}
                 if "selenium" in scraper_type:
                     kwargs['driver'] = driver
@@ -500,13 +522,12 @@ def verifier_les_prix():
             except Exception as e:
                 logging.error(f"Erreur inattendue lors du scraping de {tache['url']}: {e}")
 
-            # === Bloc de comparaison et d'ajout aux listes (INCHANGÉ) ===
             if prix_actuel is None:
                 logging.warning("Prix non trouvé.")
                 continue
             
             logging.info(f"Prix actuel : {prix_actuel}€")
-            df_filtre = df[(df['ID_Set'] == tache['id_set']) & (df['Site'] == site)]
+            df_filtre = df_historique[(df_historique['ID_Set'] == tache['id_set']) & (df_historique['Site'] == site)]
             prix_precedent = df_filtre['Prix'].iloc[-1] if not df_filtre.empty else None
             
             if prix_precedent is None or abs(prix_actuel - prix_precedent) > 0.01:
@@ -516,28 +537,44 @@ def verifier_les_prix():
                 
                 if prix_precedent is not None and prix_actuel < prix_precedent:
                     logging.info("BAISSE DE PRIX ! Ajout à la liste de notification.")
+                    
+                    is_bonne_affaire = False
+                    try:
+                        # On récupère les infos de configuration pour ce set
+                        config_set_row = df_config.loc[df_config['ID_Set'] == tache['id_set']].iloc[0]
+                        nb_pieces = pd.to_numeric(config_set_row.get('nbPieces'), errors='coerce')
+                        collection = config_set_row.get('Collection', 'default')
+                        
+                        if pd.notna(nb_pieces):
+                            prix_moyen = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLLECTION['default'])
+                            prix_juste = nb_pieces * prix_moyen
+                            seuil = prix_juste * SEUIL_BONNE_AFFAIRE
+                            if prix_actuel <= seuil:
+                                is_bonne_affaire = True
+                    except IndexError:
+                        logging.warning(f"Impossible de trouver les infos de config pour le set {tache['id_set']} pour l'analyse de 'bonne affaire'.")
+
                     baisses_de_prix_a_notifier.append({
                         'nom_set': tache['nom_set'], 'nouveau_prix': prix_actuel,
                         'prix_precedent': prix_precedent, 'site': site, 'url': tache['url']
+                        'bonne_affaire': is_bonne_affaire # On ajoute l'info au panier
                     })
             else:
                 logging.info("Pas de changement de prix.")
             time.sleep(5)
         
-        # On ferme le navigateur après avoir traité toutes les URL de ce site
         if driver:
             logging.info(f"Fermeture de la session Selenium pour {site}")
             driver.quit()
 
-    # Le reste de la fonction est inchangé (envoi de l'email et sauvegarde)
     if baisses_de_prix_a_notifier:
         envoyer_email_recapitulatif(baisses_de_prix_a_notifier)
     if lignes_a_ajouter:
         df_a_ajouter = pd.DataFrame(lignes_a_ajouter)
-        df = pd.concat([df, df_a_ajouter], ignore_index=True)
-        df['ID_Set'] = df['ID_Set'].astype(str)
-        df['Prix'] = df['Prix'].astype(float)
-        df.to_excel(FICHIER_EXCEL, index=False)
+        df_historique = pd.concat([df_historique, df_a_ajouter], ignore_index=True)
+        df_historique['ID_Set'] = df_historique['ID_Set'].astype(str)
+        df_historique['Prix'] = df_historique['Prix'].astype(float)
+        df_historique.to_excel(FICHIER_EXCEL, index=False)
         logging.info(f"{len(lignes_a_ajouter)} modifications enregistrées dans le fichier Excel.")
 
 # Ce bloc garantit que la fonction principale est appelée

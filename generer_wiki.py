@@ -5,19 +5,25 @@ import os
 import git
 from datetime import datetime
 import re
+import logging
 import urllib.parse
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 # Dictionnaire de connaissance des prix moyens par pièce
 PRIX_MOYEN_PAR_COLLECTION = {
-    "Star Wars": 0.130,
-    "Technic": 0.117,
-    "Disney": 0.108,
+    "Star Wars"  : 0.130,
+    "Technic"    : 0.117,
+    "Disney"     : 0.108,
     "Super Mario": 0.101,
-    "Ideas": 0.096,
-    "Icons": 0.092,
-    "Botanicals": 0.085,
-    # Ajoutez d'autres collections ici
-    "default": 0.10 # Une valeur par défaut si la collection n'est pas listée
+    "Ideas"      : 0.096,
+    "Icons"      : 0.092,
+    "Botanicals" : 0.085,
+    "default"    : 0.100
 }
 
 SEUIL_BONNE_AFFAIRE = 0.85 # 15% de réduction par rapport au prix moyen
@@ -28,19 +34,21 @@ FICHIER_CONFIG = "config_sets.xlsx"
 WIKI_REPO_URL = os.getenv("WIKI_URL", "https://github.com/Aktawind/lego-price-tracker.wiki.git")
 WIKI_LOCAL_PATH = "lego_wiki"
 
+# --- Préparation du chemin local pour le dépôt wiki ---
 def preparer_repo_wiki():
     """Clone le repo du wiki s'il n'existe pas, ou le met à jour."""
     if os.path.exists(WIKI_LOCAL_PATH):
-        print("Mise à jour du dépôt wiki local...")
+        logging.info("Mise à jour du dépôt wiki local...")
         repo = git.Repo(WIKI_LOCAL_PATH)
         repo.remotes.origin.pull()
     else:
-        print("Clonage du dépôt wiki...")
+        logging.info("Clonage du dépôt wiki...")
         git.Repo.clone_from(WIKI_REPO_URL, WIKI_LOCAL_PATH)
     
     # Créer le dossier pour les images s'il n'existe pas
     os.makedirs(os.path.join(WIKI_LOCAL_PATH, "images"), exist_ok=True)
 
+# --- GÉNÉRATION DES GRAPHIQUES ---
 def generer_graphique(df_set_history, id_set):
     """Génère et sauvegarde un graphique d'évolution des prix pour un set."""
     plt.style.use('seaborn-v0_8-whitegrid')
@@ -58,20 +66,19 @@ def generer_graphique(df_set_history, id_set):
     chemin_image = os.path.join(WIKI_LOCAL_PATH, "images", f"graph_{id_set}.png")
     plt.savefig(chemin_image)
     plt.close(fig) # Fermer la figure pour libérer la mémoire
-    print(f"Graphique généré : {chemin_image}")
+    logging.info(f"Graphique généré : {chemin_image}")
     return f"images/graph_{id_set}.png"
 
-# REMPLACEZ VOTRE FONCTION EXISTANTE PAR CELLE-CI
-
+# --- GÉNÉRATION DES PAGES WIKI ---
 def generer_pages_wiki():
-    print("Début de la génération des pages du Wiki...")
+    logging.info("Début de la génération des pages du Wiki...")
     
     try:
         df_prix = pd.read_excel(FICHIER_PRIX, dtype={'ID_Set': str})
         df_config = pd.read_excel(FICHIER_CONFIG, dtype={'ID_Set': str})
         df_prix['Date'] = pd.to_datetime(df_prix['Date'])
     except FileNotFoundError as e:
-        print(f"Erreur: Fichier manquant - {e}")
+        logging.error(f"Erreur: Fichier manquant - {e}")
         return
 
     preparer_repo_wiki()
@@ -89,7 +96,7 @@ def generer_pages_wiki():
         df_set_history = df_prix[df_prix['ID_Set'] == id_set].copy()
         
         if df_set_history.empty:
-            print(f"Aucun historique de prix pour {id_set}. Ignoré.")
+            logging.warning(f"Aucun historique de prix pour {id_set}. Ignoré.")
             continue
 
         dernier_scan = df_set_history.sort_values('Date').groupby('Site').last().reset_index()
@@ -138,9 +145,9 @@ def generer_pages_wiki():
             if prix_juste:
                 ppp_actuel = prix / nb_pieces
                 if ppp_actuel <= prix_moyen_collection:
-                    analyse_html = f"<strong><font color='green'>Excellent !</font></strong>"
+                    analyse_html = f"<strong><span style='color:green;'>Excellent !</span></strong>"
                 else:
-                    analyse_html = f"<strong><font color='red'>Élevé</font></strong>"
+                    analyse_html = f"<strong><span style='color:red;'>Élevé</span></strong>"
                 page_detail_content.append(f"| {site} | **{prix:.2f}€** | {ppp_actuel:.3f}€ | {analyse_html} |")
             else:
                  page_detail_content.append(f"| {site} | **{prix:.2f}€** | - | - |")
@@ -150,20 +157,21 @@ def generer_pages_wiki():
         
         with open(os.path.join(WIKI_LOCAL_PATH, nom_fichier_page), 'w', encoding='utf-8') as f:
             f.write("\n".join(page_detail_content))
-        print(f"Page de détail générée : {nom_fichier_page}")
+        logging.info(f"Page de détail générée : {nom_fichier_page}")
 
     with open(os.path.join(WIKI_LOCAL_PATH, "Home.md"), 'w', encoding='utf-8') as f:
         f.write("\n".join(home_content))
-    print("Page d'accueil 'Home.md' générée.")
+    logging.info("Page d'accueil 'Home.md' générée.")
 
+# --- PUSH DES CHANGEMENTS VERS LE WIKI ---
 def pousser_changements_wiki():
     try:
         repo = git.Repo(WIKI_LOCAL_PATH)
         if not repo.is_dirty(untracked_files=True):
-            print("Aucun changement à pousser sur le wiki.")
+            logging.info("Aucun changement à pousser sur le wiki.")
             return
 
-        print("Détection de changements. Configuration de Git et push vers le wiki...")
+        logging.info("Détection de changements. Configuration de Git et push vers le wiki...")
         
         # Configuration de l'utilisateur Git DANS le script
         repo.config_writer().set_value("user", "name", os.getenv("GIT_USER", "Bot")).release()
@@ -177,10 +185,11 @@ def pousser_changements_wiki():
         origin.set_url(WIKI_REPO_URL)
         
         origin.push()
-        print("Wiki mis à jour avec succès !")
+        logging.info("Wiki mis à jour avec succès !")
     except Exception as e:
-        print(f"Erreur lors du push vers le wiki : {e}")
+        logging.error(f"Erreur lors du push vers le wiki : {e}")
 
+# --- POINT D'ENTRÉE DU SCRIPT ---
 if __name__ == "__main__":
     generer_pages_wiki()
     pousser_changements_wiki()
