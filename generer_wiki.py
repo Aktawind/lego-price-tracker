@@ -74,8 +74,11 @@ def generer_graphique(df_set_history, id_set):
     # Utiliser Seaborn pour un joli graphique
     sns.lineplot(data=df_set_history, x='Date', y='Prix', hue='Site', marker='o', ax=ax)
 
+    unique_dates = df_set_history['Date'].unique()
+    ax.set_xticks(unique_dates)
     date_format = DateFormatter("%d/%m/%Y")
     ax.xaxis.set_major_formatter(date_format)
+
     ax.set_title(f"Évolution du prix pour le set {id_set}", fontsize=16)
     ax.set_ylabel("Prix (€)")
     ax.set_xlabel("Date")

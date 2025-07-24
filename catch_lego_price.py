@@ -398,20 +398,17 @@ def envoyer_email_recapitulatif(baisses_de_prix):
     nombre_baisses = len(baisses_de_prix)
     sujet = f"Alerte Prix LEGO : {nombre_baisses} baisse(s) de prix détectée(s) !"
     
-    # === DÉBUT DE LA NOUVELLE STRUCTURE D'EMAIL ===
-    
-    # 1. On crée le conteneur principal de l'email
-    msg_root = MIMEMultipart('related')
-    msg_root['Subject'] = sujet
-    msg_root['From'] = EMAIL_ADRESSE
-    msg_root['To'] = EMAIL_DESTINATAIRE
-    
-    # 2. On crée un conteneur "alternative" pour le corps du message.
-    #    Cela permet d'avoir une version texte ET une version HTML.
-    msg_alternative = MIMEMultipart('alternative')
-    msg_root.attach(msg_alternative)
+    # On crée un email multipart, mais simple
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = sujet
+    msg['From'] = EMAIL_ADRESSE
+    msg['To'] = EMAIL_DESTINATAIRE
 
-    # On prépare les deux versions du corps de l'email
+    #On crée un conteneur "alternative" pour le corps du message.
+    #    Cela permet d'avoir une version texte ET une version HTML
+    msg_alternative = MIMEMultipart('alternative')
+    msg.attach(msg_alternative)
+    
     text_body = "Bonjour,\n\nVoici les baisses de prix détectées aujourd'hui :\n\n"
     html_body = """
     <html>
@@ -438,24 +435,8 @@ def envoyer_email_recapitulatif(baisses_de_prix):
         # Construction de la version HTML
         message_bonne_affaire_html = "<br>   <b>>> C'est une bonne affaire ! ✅✅</b>" if deal.get('bonne_affaire') else ""
         image_html_tag = ""
-        
-        # --- LOGIQUE D'INTÉGRATION DE L'IMAGE (CORRIGÉE) ---
         image_url = deal.get('image_url')
-        if image_url:
-            try:
-                image_cid = f'image{image_cid_counter}'
-                image_html_tag = f'<img src="cid:{image_cid}" width="150" style="float:left; margin-right:15px; border:1px solid #ddd;">'
-                
-                image_data = requests.get(image_url).content
-                img = MIMEImage(image_data)
-                
-                # LA LIGNE LA PLUS IMPORTANTE : LE CID DOIT ÊTRE ENTRE CHEVRONS
-                img.add_header('Content-ID', f'<{image_cid}>')
-                
-                msg_root.attach(img) # On attache l'image au conteneur principal
-                image_cid_counter += 1
-            except Exception as e:
-                logging.warning(f"Impossible de télécharger ou d'intégrer l'image {image_url}: {e}")
+        image_html_tag = f'<img src="{image_url}" width="150" style="float:left; margin-right:15px; border:1px solid #ddd;">'
         
         html_body += f"""
         <hr>
@@ -481,12 +462,11 @@ def envoyer_email_recapitulatif(baisses_de_prix):
     msg_alternative.attach(MIMEText(text_body, 'plain'))
     msg_alternative.attach(MIMEText(html_body, 'html'))
     
-    # La partie envoi reste la même
     try:
         with smtplib.SMTP('smtp.gmail.com', 587) as smtp_server:
             smtp_server.starttls()
             smtp_server.login(EMAIL_ADRESSE, EMAIL_MOT_DE_PASSE)
-            smtp_server.send_message(msg_root) # On envoie le conteneur principal
+            smtp_server.send_message(msg) # On envoie le conteneur principal
         logging.info(f"Email récapitulatif de {nombre_baisses} baisse(s) envoyé !")
     except Exception as e:
         logging.error(f"Erreur lors de l'envoi de l'email récapitulatif : {e}")
