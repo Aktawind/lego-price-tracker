@@ -35,6 +35,22 @@ FICHIER_CONFIG = "config_sets.xlsx"
 WIKI_REPO_URL = os.getenv("WIKI_URL", "https://github.com/Aktawind/lego-price-tracker.wiki.git")
 WIKI_LOCAL_PATH = "lego_wiki"
 
+# --- Nettoyage du dossier wiki ---
+def nettoyer_dossier_wiki(chemin_dossier):
+    """Supprime tous les fichiers .md et les images de graphiques existants."""
+    logging.info(f"Nettoyage du dossier du wiki : {chemin_dossier}")
+    # Nettoyer les fichiers .md à la racine
+    for fichier in os.listdir(chemin_dossier):
+        if fichier.endswith(".md"):
+            os.remove(os.path.join(chemin_dossier, fichier))
+    
+    # Nettoyer les graphiques dans le dossier images
+    dossier_images = os.path.join(chemin_dossier, "images")
+    if os.path.exists(dossier_images):
+        for fichier in os.listdir(dossier_images):
+            if fichier.startswith("graph_") and fichier.endswith(".png"):
+                os.remove(os.path.join(dossier_images, fichier))
+
 # --- Préparation du chemin local pour le dépôt wiki ---
 def preparer_repo_wiki():
     """Clone le repo du wiki s'il n'existe pas, ou le met à jour."""
@@ -58,8 +74,11 @@ def generer_graphique(df_set_history, id_set):
     # Utiliser Seaborn pour un joli graphique
     sns.lineplot(data=df_set_history, x='Date', y='Prix', hue='Site', marker='o', ax=ax)
 
+    unique_dates = df_set_history['Date'].unique()
+    ax.set_xticks(unique_dates)
     date_format = DateFormatter("%d/%m/%Y")
     ax.xaxis.set_major_formatter(date_format)
+
     ax.set_title(f"Évolution du prix pour le set {id_set}", fontsize=16)
     ax.set_ylabel("Prix (€)")
     ax.set_xlabel("Date")
@@ -67,24 +86,25 @@ def generer_graphique(df_set_history, id_set):
     plt.tight_layout()
     
     chemin_image = os.path.join(WIKI_LOCAL_PATH, "images", f"graph_{id_set}.png")
-    plt.savefig(chemin_image)
+    plt.savefig(chemin_image, dpi=150)
     plt.close(fig) # Fermer la figure pour libérer la mémoire
     logging.info(f"Graphique généré : {chemin_image}")
     return f"images/graph_{id_set}.png"
 
 # --- GÉNÉRATION DES PAGES WIKI ---
-def generer_pages_wiki():
+def generer_pages_wiki(df_config):
     logging.info("Début de la génération des pages du Wiki...")
     
     try:
         df_prix = pd.read_excel(FICHIER_PRIX, dtype={'ID_Set': str})
         df_config = pd.read_excel(FICHIER_CONFIG, dtype={'ID_Set': str})
-        df_prix['Date'] = pd.to_datetime(df_prix['Date'])
+        df_prix['Date'] = pd.to_datetime(df_prix['Date']).dt.normalize()
     except FileNotFoundError as e:
         logging.error(f"Erreur: Fichier manquant - {e}")
         return
 
     preparer_repo_wiki()
+    nettoyer_dossier_wiki(WIKI_LOCAL_PATH)
 
     home_content = ["# Suivi des Prix LEGO", "Mis à jour le : " + datetime.now().strftime('%d/%m/%Y à %H:%M') + "\n",
                     "| Image | Set | Meilleur Prix Actuel |", "|:---:|:---|:---|"]
@@ -112,8 +132,7 @@ def generer_pages_wiki():
         seuil_bonne_affaire = prix_juste * SEUIL_BONNE_AFFAIRE if prix_juste else None
         
         # --- Génération des noms de page et liens ---
-        nom_set_nettoye = re.sub(r'[^a-zA-Z0-9]', '-', nom_set).strip('-')
-        nom_fichier_page = f"{id_set}-{nom_set_nettoye}.md"
+        nom_fichier_page = f"{id_set}-{nom_set.replace(' ', '-')}.md"
         lien_wiki = nom_fichier_page[:-3] # On enlève le .md pour le lien
 
         # --- Page d'accueil ---
@@ -130,8 +149,8 @@ def generer_pages_wiki():
 
         # --- Pages de détail ---
         chemin_graphique = generer_graphique(df_set_history, id_set)
-        page_detail_content = [f"# {nom_set} ({id_set})"]
-        if image_url: page_detail_content.append(f"<img src='{image_url}' alt='Image de {nom_set}' width='400'>\n")
+        #page_detail_content = [f"# {nom_set} ({id_set})"]
+        page_detail_content = [f"<img src='{image_url}' alt='Image de {nom_set}' width='400'>\n"]
         
         # Section d'analyse
         if prix_juste:
@@ -149,18 +168,22 @@ def generer_pages_wiki():
             for _, row in dernier_scan.iterrows():
                     prix = row['Prix']
                     site = row['Site']
+
+                    colonne_url = f"URL_{site.replace('.', '_')}" # ex: Lego.com -> URL_Lego_com
+                    url_produit = config_set.get(colonne_url, '#')
+                    site_md = f"[{site}]({url_produit})"
                     
                     analyse_emoji = ""
                     ppp_actuel = prix / nb_pieces
                     
                     if ppp_actuel <= seuil_bonne_affaire / nb_pieces:
-                        analyse_emoji = "Très Bonne Affaire ✅✅"
+                        analyse_emoji = "✅✅"
                     elif ppp_actuel <= prix_moyen_collection:
-                        analyse_emoji = "Bon Prix ✅"
+                        analyse_emoji = "✅"
                     else:
-                        analyse_emoji = "Élevé ❌"
+                        analyse_emoji = "❌"
 
-                    page_detail_content.append(f"| {site} | **{prix:.2f}€** | {ppp_actuel:.3f}€ | {analyse_emoji} |")
+                    page_detail_content.append(f"| {site_md} | **{prix:.2f}€** | {ppp_actuel:.3f}€ | {analyse_emoji} |")
         else:
              # Gérer le cas où on n'a pas les infos de pièces
              page_detail_content.append("\n## Prix Actuels par Site")
@@ -171,7 +194,7 @@ def generer_pages_wiki():
 
         chemin_graphique = generer_graphique(df_set_history, id_set)
         page_detail_content.append("\n## Évolution des prix")
-        page_detail_content.append(f"<img src='./{chemin_graphique}' alt='Graphique des prix' width='700'>\n")
+        page_detail_content.append(f"<img src='./{chemin_graphique}' alt='Graphique des prix' width='900'>\n")
         
         with open(os.path.join(WIKI_LOCAL_PATH, nom_fichier_page), 'w', encoding='utf-8') as f:
             f.write("\n".join(page_detail_content))
@@ -209,5 +232,7 @@ def pousser_changements_wiki():
 
 # --- POINT D'ENTRÉE DU SCRIPT ---
 if __name__ == "__main__":
-    generer_pages_wiki()
-    pousser_changements_wiki()
+    df_config = pd.read_excel(FICHIER_CONFIG, dtype={'ID_Set': str})
+    if not df_config.empty:
+        generer_pages_wiki(df_config) # On passe df_config en argument
+        pousser_changements_wiki()

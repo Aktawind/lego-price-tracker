@@ -5,6 +5,7 @@ from datetime import datetime
 import time
 import smtplib
 from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import urllib3
 import os
 import time
@@ -412,49 +413,78 @@ def recuperer_prix_standard(url, headers, selecteur):
     
 # Fonction pour envoyer un email d'alerte
 def envoyer_email_recapitulatif(baisses_de_prix):
-    """Prend une liste de baisses de prix et envoie un seul email de résumé."""
+    """
+    Prend une liste de baisses de prix et envoie un seul email de résumé
+    avec une belle mise en page HTML, mais SANS images intégrées.
+    """
     
     nombre_baisses = len(baisses_de_prix)
     sujet = f"Alerte Prix LEGO : {nombre_baisses} baisse(s) de prix détectée(s) !"
     
-    details_baisses = []
-    for deal in baisses_de_prix:
-        # On construit la ligne "Bonne Affaire" uniquement si c'est le cas
-        message_bonne_affaire = ""
-        if deal.get('bonne_affaire', False): # .get() pour éviter une erreur si la clé manque
-            message_bonne_affaire = "\n   >> C'est une bonne affaire ! 🟢"
-            
-        detail_str = (
-            f" {deal['nom_set']}\n"
-            f"   Site: {deal['site']}\n"
-            f"   Ancien Prix: {deal['prix_precedent']}€\n"
-            f"   NOUVEAU PRIX: {deal['nouveau_prix']}€\n" # On met en avant le nouveau prix
-            f"{message_bonne_affaire}\n" # On insère notre message ici
-            f"   Lien: {deal['url']}"
-        )
-        details_baisses.append(detail_str)
-    
-    lien_wiki = "https://github.com/Aktawind/lego-price-tracker/wiki"
-    corps = (
-            "Bonjour,\n\n"
-            "Voici les baisses de prix détectées aujourd'hui :\n\n"
-            + "\n\n--------------------\n\n".join(details_baisses)
-            + f"\n\n\nPour une analyse détaillée et l'historique des prix, consultez le tableau de bord :\n{lien_wiki}"
-    )    
-    # La partie envoi reste la même
-    msg = MIMEText(corps)
+    # On crée un email 'alternative' pour avoir une version texte et une version HTML
+    msg = MIMEMultipart('alternative')
     msg['Subject'] = sujet
     msg['From'] = EMAIL_ADRESSE
     msg['To'] = EMAIL_DESTINATAIRE
+
+    # On prépare les deux versions du corps de l'email
+    text_body = "Bonjour,\n\nVoici les baisses de prix détectées aujourd'hui :\n\n"
+    html_body = """
+    <html>
+      <head></head>
+      <body style="font-family: sans-serif;">
+        <h2>Bonjour,</h2>
+        <p>Voici les baisses de prix détectées aujourd'hui :</p>
+    """
+    
+    for deal in baisses_de_prix:
+        # Construction de la version TEXTE (inchangée)
+        message_bonne_affaire_txt = "\n   >> C'est une bonne affaire ! 🟢" if deal.get('bonne_affaire') else ""
+        text_body += (
+            f"--------------------\n"
+            f"Set: {deal['nom_set']}\n"
+            f"Site: {deal['site']}\n"
+            f"Ancien Prix: {deal['prix_precedent']:.2f}€\n"
+            f"NOUVEAU PRIX: {deal['nouveau_prix']:.2f}€{message_bonne_affaire_txt}\n"
+            f"Lien: {deal['url']}\n"
+        )
+
+        # Construction de la version HTML (simplifiée, sans images)
+        message_bonne_affaire_html = "<br>   <b>>> C'est une bonne affaire ! ✅✅</b>" if deal.get('bonne_affaire') else ""
+        
+        html_body += f"""
+        <hr>
+        <div style="padding: 10px;">
+            <h3 style="margin-top:0;">{deal['nom_set']}</h3>
+            <p style="line-height: 1.5;">
+                <b>Site:</b> {deal['site']}<br>
+                <b>Ancien Prix:</b> {deal['prix_precedent']:.2f}€<br>
+                <b style="color:green; font-size: 1.1em;">NOUVEAU PRIX: {deal['nouveau_prix']:.2f}€</b>
+                {message_bonne_affaire_html}
+            </p>
+            <p><a href="{deal['url']}" style="background-color: #007bff; color: white; padding: 8px 12px; text-decoration: none; border-radius: 5px;">Voir l'offre</a></p>
+        </div>
+        """
+        
+    lien_wiki = "https://github.com/Aktawind/lego-price-tracker/wiki"
+    text_body += f"\n\nPour une analyse détaillée, consultez votre tableau de bord : {lien_wiki}"
+    html_body += f'<hr><p>Pour une analyse détaillée et l\'historique des prix, consultez votre <a href="{lien_wiki}">tableau de bord</a>.</p></body></html>'
+    
+    # On attache les deux versions (texte et HTML)
+    msg.attach(MIMEText(text_body, 'plain'))
+    msg.attach(MIMEText(html_body, 'html'))
+    
+    # La partie envoi reste la même
     try:
         with smtplib.SMTP('smtp.gmail.com', 587) as smtp_server:
             smtp_server.starttls()
             smtp_server.login(EMAIL_ADRESSE, EMAIL_MOT_DE_PASSE)
-            smtp_server.sendmail(EMAIL_ADRESSE, EMAIL_DESTINATAIRE, msg.as_string())
+            smtp_server.send_message(msg)
         logging.info(f"Email récapitulatif de {nombre_baisses} baisse(s) envoyé !")
     except Exception as e:
         logging.error(f"Erreur lors de l'envoi de l'email récapitulatif : {e}")
 
+# Fonction principale pour vérifier les prix
 def verifier_les_prix():
     logging.info("Lancement de la vérification des prix")
     try:
@@ -572,6 +602,7 @@ def verifier_les_prix():
                         config_set_row = df_config.loc[df_config['ID_Set'] == tache['id_set']].iloc[0]
                         nb_pieces = pd.to_numeric(config_set_row.get('nbPieces'), errors='coerce')
                         collection = config_set_row.get('Collection', 'default')
+                        image_url = config_set_row.get('Image_URL', '') # On récupère l'URL de l'image
                         
                         if pd.notna(nb_pieces):
                             prix_moyen = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLLECTION['default'])
@@ -588,7 +619,8 @@ def verifier_les_prix():
                         'prix_precedent': prix_precedent,
                         'site': site,
                         'url': tache['url'],
-                        'bonne_affaire': is_bonne_affaire
+                        'bonne_affaire': is_bonne_affaire,
+                        'image_url': image_url
                     })
             else:
                 logging.info("Pas de changement de prix.")
