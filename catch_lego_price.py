@@ -39,9 +39,30 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 '''
 
 CONFIG_SITES = {   
+    "Amazon": {
+        "type": "amazon_selenium",
+        "selecteur": None,
+        "timeout": 15 # On donne plus de temps à Amazon
+    },
+    "Lego": {
+        "type": "standard",
+        "selecteur": '[data-test="product-price"]'
+    },
+    "Auchan": {
+        "type": "standard",
+        "selecteur": ".product-price"
+    },
     "Leclerc": {
         "type": "standard",
         "selecteur": ".egToM .visually-hidden"
+    },
+    "Carrefour": {
+        "type": "eclate_selenium", 
+        "selecteur": { 
+            "euros": ".product-price__content.c-text--size-m",
+            "centimes": ".product-price__content.c-text--size-s"
+        },
+        "timeout": 10
     }
 }
 
