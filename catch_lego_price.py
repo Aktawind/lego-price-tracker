@@ -101,7 +101,7 @@ SETS_A_SURVEILLER = charger_configuration_sets('config_sets.xlsx', CONFIG_SITES)
 FICHIER_EXCEL = "prix_lego.xlsx"
 EMAIL_ADRESSE = os.getenv('GMAIL_ADDRESS')
 EMAIL_MOT_DE_PASSE = os.getenv('GMAIL_APP_PASSWORD')
-EMAIL_DESTINATAIRE = os.getenv('MAIL_DESTINATAIRE_TEST')
+EMAIL_DESTINATAIRE = os.getenv('MAIL_DESTINATAIRE')
 
 # Vérification que la configuration des sets a été chargée correctement
 if not SETS_A_SURVEILLER:
