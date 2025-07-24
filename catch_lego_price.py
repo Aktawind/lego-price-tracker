@@ -5,6 +5,8 @@ from datetime import datetime
 import time
 import smtplib
 from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
+from email.mime.multipart import MIMEMultipart
 import urllib3
 import os
 import time
@@ -396,40 +398,78 @@ def envoyer_email_recapitulatif(baisses_de_prix):
     nombre_baisses = len(baisses_de_prix)
     sujet = f"Alerte Prix LEGO : {nombre_baisses} baisse(s) de prix détectée(s) !"
     
-    details_baisses = []
-    for deal in baisses_de_prix:
-        # On construit la ligne "Bonne Affaire" uniquement si c'est le cas
-        message_bonne_affaire = ""
-        if deal.get('bonne_affaire', False): # .get() pour éviter une erreur si la clé manque
-            message_bonne_affaire = "\n   >> C'est une bonne affaire ! 🟢"
-            
-        detail_str = (
-            f" {deal['nom_set']}\n"
-            f"   Site: {deal['site']}\n"
-            f"   Ancien Prix: {deal['prix_precedent']}€\n"
-            f"   NOUVEAU PRIX: {deal['nouveau_prix']}€\n" # On met en avant le nouveau prix
-            f"{message_bonne_affaire}\n" # On insère notre message ici
-            f"   Lien: {deal['url']}"
-        )
-        details_baisses.append(detail_str)
-    
-    lien_wiki = "https://github.com/Aktawind/lego-price-tracker/wiki"
-    corps = (
-            "Bonjour,\n\n"
-            "Voici les baisses de prix détectées aujourd'hui :\n\n"
-            + "\n\n--------------------\n\n".join(details_baisses)
-            + f"\n\n\nPour une analyse détaillée et l'historique des prix, consultez le tableau de bord :\n{lien_wiki}"
-    )    
-    # La partie envoi reste la même
-    msg = MIMEText(corps)
+    # On crée un email de type "multipart/related" pour pouvoir intégrer des images
+    msg = MIMEMultipart('related')
     msg['Subject'] = sujet
     msg['From'] = EMAIL_ADRESSE
     msg['To'] = EMAIL_DESTINATAIRE
+
+    # On prépare le corps de l'email en HTML
+    html_body = "<html><body>"
+    html_body += "<h2>Bonjour,</h2>"
+    html_body += "<p>Voici les baisses de prix détectées aujourd'hui :</p>"
+    
+    # On va attacher les images et leur donner un ID unique
+    image_cid_counter = 0
+
+    for deal in baisses_de_prix:
+        message_bonne_affaire = ""
+        if deal.get('bonne_affaire', False):
+            message_bonne_affaire = "<br>   <b>>> C'est une bonne affaire ! ✅✅</b>"
+            
+        # On construit la partie HTML pour ce deal
+        html_body += f"""
+        <hr>
+        <div style="padding: 10px;">
+            <h3>{deal['nom_set']}</h3>
+            <p>
+        """
+        
+        image_url = deal.get('image_url')
+        if image_url:
+            try:
+                # On génère un Content-ID unique pour l'image
+                image_cid = f'image{image_cid_counter}'
+                
+                # On ajoute la balise <img> dans le HTML qui pointe vers ce Content-ID
+                html_body += f'<img src="cid:{image_cid}" width="150" style="float:left; margin-right:15px;">'
+                
+                # On télécharge l'image
+                image_data = requests.get(image_url).content
+                
+                # On crée l'objet MIMEImage et on l'attache à l'email
+                img = MIMEImage(image_data)
+                img.add_header('Content-ID', f'<{image_cid}>')
+                msg.attach(img)
+                
+                image_cid_counter += 1
+            except Exception as e:
+                logging.warning(f"Impossible de télécharger ou d'intégrer l'image {image_url}: {e}")
+        
+        html_body += f"""
+                <b>Site:</b> {deal['site']}<br>
+                <b>Ancien Prix:</b> {deal['prix_precedent']:.2f}€<br>
+                <b style="color:green;">NOUVEAU PRIX: {deal['nouveau_prix']:.2f}€</b>
+                {message_bonne_affaire}
+            </p>
+            <p><a href="{deal['url']}">Voir l'offre</a></p>
+            <div style="clear:both;"></div>
+        </div>
+        """
+    
+    lien_wiki = "https://github.com/Aktawind/lego-price-tracker/wiki"
+    html_body += f'<hr><p>Pour une analyse détaillée et l\'historique des prix, consultez votre <a href="{lien_wiki}">tableau de bord</a>.</p>'
+    html_body += "</body></html>"
+    
+    # On attache le corps HTML à notre message
+    msg.attach(MIMEText(html_body, 'html'))
+    
+    # La partie envoi reste la même
     try:
         with smtplib.SMTP('smtp.gmail.com', 587) as smtp_server:
             smtp_server.starttls()
             smtp_server.login(EMAIL_ADRESSE, EMAIL_MOT_DE_PASSE)
-            smtp_server.sendmail(EMAIL_ADRESSE, EMAIL_DESTINATAIRE, msg.as_string())
+            smtp_server.send_message(msg) # On utilise send_message pour les emails complexes
         logging.info(f"Email récapitulatif de {nombre_baisses} baisse(s) envoyé !")
     except Exception as e:
         logging.error(f"Erreur lors de l'envoi de l'email récapitulatif : {e}")
@@ -551,6 +591,7 @@ def verifier_les_prix():
                         config_set_row = df_config.loc[df_config['ID_Set'] == tache['id_set']].iloc[0]
                         nb_pieces = pd.to_numeric(config_set_row.get('nbPieces'), errors='coerce')
                         collection = config_set_row.get('Collection', 'default')
+                        image_url = config_set_row.get('Image_URL', '') # On récupère l'URL de l'image
                         
                         if pd.notna(nb_pieces):
                             prix_moyen = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLLECTION['default'])
@@ -567,7 +608,8 @@ def verifier_les_prix():
                         'prix_precedent': prix_precedent,
                         'site': site,
                         'url': tache['url'],
-                        'bonne_affaire': is_bonne_affaire
+                        'bonne_affaire': is_bonne_affaire,
+                        'image_url': image_url
                     })
             else:
                 logging.info("Pas de changement de prix.")
