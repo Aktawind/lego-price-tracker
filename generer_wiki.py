@@ -83,7 +83,7 @@ def generer_graphique(df_set_history, id_set):
     plt.tight_layout()
     
     chemin_image = os.path.join(WIKI_LOCAL_PATH, "images", f"graph_{id_set}.png")
-    plt.savefig(chemin_image)
+    plt.savefig(chemin_image, dpi=150)
     plt.close(fig) # Fermer la figure pour libérer la mémoire
     logging.info(f"Graphique généré : {chemin_image}")
     return f"images/graph_{id_set}.png"
@@ -187,7 +187,7 @@ def generer_pages_wiki():
 
         chemin_graphique = generer_graphique(df_set_history, id_set)
         page_detail_content.append("\n## Évolution des prix")
-        page_detail_content.append(f"<img src='./{chemin_graphique}' alt='Graphique des prix' width='700'>\n")
+        page_detail_content.append(f"<img src='./{chemin_graphique}' alt='Graphique des prix' width='900'>\n")
         
         with open(os.path.join(WIKI_LOCAL_PATH, nom_fichier_page), 'w', encoding='utf-8') as f:
             f.write("\n".join(page_detail_content))

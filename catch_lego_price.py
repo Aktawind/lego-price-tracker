@@ -393,87 +393,105 @@ def recuperer_prix_standard(url, headers, selecteur):
     
 # Fonction pour envoyer un email d'alerte
 def envoyer_email_recapitulatif(baisses_de_prix):
-    """Prend une liste de baisses de prix et envoie un seul email de résumé."""
+    """Prend une liste de baisses de prix et envoie un seul email de résumé avec images intégrées."""
     
     nombre_baisses = len(baisses_de_prix)
     sujet = f"Alerte Prix LEGO : {nombre_baisses} baisse(s) de prix détectée(s) !"
     
-    # On crée un email de type "multipart/related" pour pouvoir intégrer des images
-    msg = MIMEMultipart('related')
-    msg['Subject'] = sujet
-    msg['From'] = EMAIL_ADRESSE
-    msg['To'] = EMAIL_DESTINATAIRE
-
-    # On prépare le corps de l'email en HTML
-    html_body = "<html><body>"
-    html_body += "<h2>Bonjour,</h2>"
-    html_body += "<p>Voici les baisses de prix détectées aujourd'hui :</p>"
+    # === DÉBUT DE LA NOUVELLE STRUCTURE D'EMAIL ===
     
-    # On va attacher les images et leur donner un ID unique
-    image_cid_counter = 0
+    # 1. On crée le conteneur principal de l'email
+    msg_root = MIMEMultipart('related')
+    msg_root['Subject'] = sujet
+    msg_root['From'] = EMAIL_ADRESSE
+    msg_root['To'] = EMAIL_DESTINATAIRE
+    
+    # 2. On crée un conteneur "alternative" pour le corps du message.
+    #    Cela permet d'avoir une version texte ET une version HTML.
+    msg_alternative = MIMEMultipart('alternative')
+    msg_root.attach(msg_alternative)
 
+    # On prépare les deux versions du corps de l'email
+    text_body = "Bonjour,\n\nVoici les baisses de prix détectées aujourd'hui :\n\n"
+    html_body = """
+    <html>
+      <head></head>
+      <body>
+        <p>Bonjour,</p>
+        <p>Voici les baisses de prix détectées aujourd'hui :</p>
+    """
+    # =================================================
+
+    image_cid_counter = 0
     for deal in baisses_de_prix:
-        message_bonne_affaire = ""
-        if deal.get('bonne_affaire', False):
-            message_bonne_affaire = "<br>   <b>>> C'est une bonne affaire ! ✅✅</b>"
-            
-        # On construit la partie HTML pour ce deal
-        html_body += f"""
-        <hr>
-        <div style="padding: 10px;">
-            <h3>{deal['nom_set']}</h3>
-            <p>
-        """
+        # Construction de la version TEXTE
+        message_bonne_affaire_txt = "\n   >> C'est une bonne affaire ! 🟢" if deal.get('bonne_affaire') else ""
+        text_body += (
+            f"--------------------\n"
+            f"Set: {deal['nom_set']}\n"
+            f"Site: {deal['site']}\n"
+            f"Ancien Prix: {deal['prix_precedent']:.2f}€\n"
+            f"NOUVEAU PRIX: {deal['nouveau_prix']:.2f}€{message_bonne_affaire_txt}\n"
+            f"Lien: {deal['url']}\n"
+        )
+
+        # Construction de la version HTML
+        message_bonne_affaire_html = "<br>   <b>>> C'est une bonne affaire ! ✅✅</b>" if deal.get('bonne_affaire') else ""
+        image_html_tag = ""
         
+        # --- LOGIQUE D'INTÉGRATION DE L'IMAGE (CORRIGÉE) ---
         image_url = deal.get('image_url')
         if image_url:
             try:
-                # On génère un Content-ID unique pour l'image
                 image_cid = f'image{image_cid_counter}'
+                image_html_tag = f'<img src="cid:{image_cid}" width="150" style="float:left; margin-right:15px; border:1px solid #ddd;">'
                 
-                # On ajoute la balise <img> dans le HTML qui pointe vers ce Content-ID
-                html_body += f'<img src="cid:{image_cid}" width="150" style="float:left; margin-right:15px;">'
-                
-                # On télécharge l'image
                 image_data = requests.get(image_url).content
-                
-                # On crée l'objet MIMEImage et on l'attache à l'email
                 img = MIMEImage(image_data)
-                img.add_header('Content-ID', f'<{image_cid}>')
-                msg.attach(img)
                 
+                # LA LIGNE LA PLUS IMPORTANTE : LE CID DOIT ÊTRE ENTRE CHEVRONS
+                img.add_header('Content-ID', f'<{image_cid}>')
+                
+                msg_root.attach(img) # On attache l'image au conteneur principal
                 image_cid_counter += 1
             except Exception as e:
                 logging.warning(f"Impossible de télécharger ou d'intégrer l'image {image_url}: {e}")
         
         html_body += f"""
+        <hr>
+        <div style="padding: 10px; font-family: sans-serif;">
+            {image_html_tag}
+            <h3 style="margin-top:0;">{deal['nom_set']}</h3>
+            <p style="line-height: 1.5;">
                 <b>Site:</b> {deal['site']}<br>
                 <b>Ancien Prix:</b> {deal['prix_precedent']:.2f}€<br>
-                <b style="color:green;">NOUVEAU PRIX: {deal['nouveau_prix']:.2f}€</b>
-                {message_bonne_affaire}
+                <b style="color:green; font-size: 1.1em;">NOUVEAU PRIX: {deal['nouveau_prix']:.2f}€</b>
+                {message_bonne_affaire_html}
             </p>
-            <p><a href="{deal['url']}">Voir l'offre</a></p>
+            <p><a href="{deal['url']}" style="background-color: #007bff; color: white; padding: 8px 12px; text-decoration: none; border-radius: 5px;">Voir l'offre</a></p>
             <div style="clear:both;"></div>
         </div>
         """
-    
+        
     lien_wiki = "https://github.com/Aktawind/lego-price-tracker/wiki"
-    html_body += f'<hr><p>Pour une analyse détaillée et l\'historique des prix, consultez votre <a href="{lien_wiki}">tableau de bord</a>.</p>'
-    html_body += "</body></html>"
+    text_body += f"\n\nPour une analyse détaillée, consultez votre tableau de bord : {lien_wiki}"
+    html_body += f'<hr><p style="font-family: sans-serif;">Pour une analyse détaillée et l\'historique des prix, consultez votre <a href="{lien_wiki}">tableau de bord</a>.</p></body></html>'
     
-    # On attache le corps HTML à notre message
-    msg.attach(MIMEText(html_body, 'html'))
+    # On attache les deux versions (texte et HTML) au conteneur "alternative"
+    msg_alternative.attach(MIMEText(text_body, 'plain'))
+    msg_alternative.attach(MIMEText(html_body, 'html'))
     
     # La partie envoi reste la même
     try:
         with smtplib.SMTP('smtp.gmail.com', 587) as smtp_server:
             smtp_server.starttls()
             smtp_server.login(EMAIL_ADRESSE, EMAIL_MOT_DE_PASSE)
-            smtp_server.send_message(msg) # On utilise send_message pour les emails complexes
+            smtp_server.send_message(msg_root) # On envoie le conteneur principal
         logging.info(f"Email récapitulatif de {nombre_baisses} baisse(s) envoyé !")
     except Exception as e:
         logging.error(f"Erreur lors de l'envoi de l'email récapitulatif : {e}")
 
+# Fonction principale pour vérifier les prix
 def verifier_les_prix():
     logging.info("Lancement de la vérification des prix")
     try:
