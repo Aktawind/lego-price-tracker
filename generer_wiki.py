@@ -9,7 +9,7 @@ import re
 # --- CONFIGURATION ---
 FICHIER_PRIX = "prix_lego.xlsx"
 FICHIER_CONFIG = "config_sets.xlsx"
-WIKI_REPO_URL = os.getenv("WIKI_URL", "https://github.com/lego-price-tracker.wiki.git")
+WIKI_REPO_URL = os.getenv("WIKI_URL", "https://github.com/Aktawind/lego-price-tracker.wiki.git")
 WIKI_LOCAL_PATH = "lego_wiki"
 
 def preparer_repo_wiki():
