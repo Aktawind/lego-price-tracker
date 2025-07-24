@@ -5,7 +5,6 @@ from datetime import datetime
 import time
 import smtplib
 from email.mime.text import MIMEText
-from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 import urllib3
 import os
@@ -393,35 +392,32 @@ def recuperer_prix_standard(url, headers, selecteur):
     
 # Fonction pour envoyer un email d'alerte
 def envoyer_email_recapitulatif(baisses_de_prix):
-    """Prend une liste de baisses de prix et envoie un seul email de résumé avec images intégrées."""
+    """
+    Prend une liste de baisses de prix et envoie un seul email de résumé
+    avec une belle mise en page HTML, mais SANS images intégrées.
+    """
     
     nombre_baisses = len(baisses_de_prix)
     sujet = f"Alerte Prix LEGO : {nombre_baisses} baisse(s) de prix détectée(s) !"
     
-    # On crée un email multipart, mais simple
+    # On crée un email 'alternative' pour avoir une version texte et une version HTML
     msg = MIMEMultipart('alternative')
     msg['Subject'] = sujet
     msg['From'] = EMAIL_ADRESSE
     msg['To'] = EMAIL_DESTINATAIRE
 
-    #On crée un conteneur "alternative" pour le corps du message.
-    #    Cela permet d'avoir une version texte ET une version HTML
-    msg_alternative = MIMEMultipart('alternative')
-    msg.attach(msg_alternative)
-    
+    # On prépare les deux versions du corps de l'email
     text_body = "Bonjour,\n\nVoici les baisses de prix détectées aujourd'hui :\n\n"
     html_body = """
     <html>
       <head></head>
-      <body>
-        <p>Bonjour,</p>
+      <body style="font-family: sans-serif;">
+        <h2>Bonjour,</h2>
         <p>Voici les baisses de prix détectées aujourd'hui :</p>
     """
-    # =================================================
-
-    image_cid_counter = 0
+    
     for deal in baisses_de_prix:
-        # Construction de la version TEXTE
+        # Construction de la version TEXTE (inchangée)
         message_bonne_affaire_txt = "\n   >> C'est une bonne affaire ! 🟢" if deal.get('bonne_affaire') else ""
         text_body += (
             f"--------------------\n"
@@ -432,16 +428,12 @@ def envoyer_email_recapitulatif(baisses_de_prix):
             f"Lien: {deal['url']}\n"
         )
 
-        # Construction de la version HTML
+        # Construction de la version HTML (simplifiée, sans images)
         message_bonne_affaire_html = "<br>   <b>>> C'est une bonne affaire ! ✅✅</b>" if deal.get('bonne_affaire') else ""
-        image_html_tag = ""
-        image_url = deal.get('image_url')
-        image_html_tag = f'<img src="{image_url}" width="150" style="float:left; margin-right:15px; border:1px solid #ddd;">'
         
         html_body += f"""
         <hr>
-        <div style="padding: 10px; font-family: sans-serif;">
-            {image_html_tag}
+        <div style="padding: 10px;">
             <h3 style="margin-top:0;">{deal['nom_set']}</h3>
             <p style="line-height: 1.5;">
                 <b>Site:</b> {deal['site']}<br>
@@ -450,23 +442,23 @@ def envoyer_email_recapitulatif(baisses_de_prix):
                 {message_bonne_affaire_html}
             </p>
             <p><a href="{deal['url']}" style="background-color: #007bff; color: white; padding: 8px 12px; text-decoration: none; border-radius: 5px;">Voir l'offre</a></p>
-            <div style="clear:both;"></div>
         </div>
         """
         
     lien_wiki = "https://github.com/Aktawind/lego-price-tracker/wiki"
     text_body += f"\n\nPour une analyse détaillée, consultez votre tableau de bord : {lien_wiki}"
-    html_body += f'<hr><p style="font-family: sans-serif;">Pour une analyse détaillée et l\'historique des prix, consultez votre <a href="{lien_wiki}">tableau de bord</a>.</p></body></html>'
+    html_body += f'<hr><p>Pour une analyse détaillée et l\'historique des prix, consultez votre <a href="{lien_wiki}">tableau de bord</a>.</p></body></html>'
     
-    # On attache les deux versions (texte et HTML) au conteneur "alternative"
-    msg_alternative.attach(MIMEText(text_body, 'plain'))
-    msg_alternative.attach(MIMEText(html_body, 'html'))
+    # On attache les deux versions (texte et HTML)
+    msg.attach(MIMEText(text_body, 'plain'))
+    msg.attach(MIMEText(html_body, 'html'))
     
+    # La partie envoi reste la même
     try:
         with smtplib.SMTP('smtp.gmail.com', 587) as smtp_server:
             smtp_server.starttls()
             smtp_server.login(EMAIL_ADRESSE, EMAIL_MOT_DE_PASSE)
-            smtp_server.send_message(msg) # On envoie le conteneur principal
+            smtp_server.send_message(msg)
         logging.info(f"Email récapitulatif de {nombre_baisses} baisse(s) envoyé !")
     except Exception as e:
         logging.error(f"Erreur lors de l'envoi de l'email récapitulatif : {e}")

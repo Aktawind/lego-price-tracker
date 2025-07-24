@@ -92,7 +92,7 @@ def generer_graphique(df_set_history, id_set):
     return f"images/graph_{id_set}.png"
 
 # --- GÉNÉRATION DES PAGES WIKI ---
-def generer_pages_wiki():
+def generer_pages_wiki(df_config):
     logging.info("Début de la génération des pages du Wiki...")
     
     try:
@@ -168,6 +168,10 @@ def generer_pages_wiki():
             for _, row in dernier_scan.iterrows():
                     prix = row['Prix']
                     site = row['Site']
+
+                    colonne_url = f"URL_{site.replace('.', '_')}" # ex: Lego.com -> URL_Lego_com
+                    url_produit = config_set.get(colonne_url, '#')
+                    site_md = f"[{site}]({url_produit})"
                     
                     analyse_emoji = ""
                     ppp_actuel = prix / nb_pieces
@@ -179,7 +183,7 @@ def generer_pages_wiki():
                     else:
                         analyse_emoji = "❌"
 
-                    page_detail_content.append(f"| {site} | **{prix:.2f}€** | {ppp_actuel:.3f}€ | {analyse_emoji} |")
+                    page_detail_content.append(f"| {site_md} | **{prix:.2f}€** | {ppp_actuel:.3f}€ | {analyse_emoji} |")
         else:
              # Gérer le cas où on n'a pas les infos de pièces
              page_detail_content.append("\n## Prix Actuels par Site")
@@ -228,5 +232,7 @@ def pousser_changements_wiki():
 
 # --- POINT D'ENTRÉE DU SCRIPT ---
 if __name__ == "__main__":
-    generer_pages_wiki()
-    pousser_changements_wiki()
+    df_config = pd.read_excel(FICHIER_CONFIG, dtype={'ID_Set': str})
+    if not df_config.empty:
+        generer_pages_wiki(df_config) # On passe df_config en argument
+        pousser_changements_wiki()
