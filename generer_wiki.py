@@ -47,64 +47,53 @@ def generer_graphique(df_set_history, id_set):
 def generer_pages_wiki():
     print("Début de la génération des pages du Wiki...")
     
-    # Charger les données
     try:
-        df_prix = pd.read_excel(FICHIER_PRIX)
-        df_config = pd.read_excel(FICHIER_CONFIG)
+        df_prix = pd.read_excel(FICHIER_PRIX, dtype={'ID_Set': str})
+        df_config = pd.read_excel(FICHIER_CONFIG, dtype={'ID_Set': str})
         df_prix['Date'] = pd.to_datetime(df_prix['Date'])
     except FileNotFoundError as e:
         print(f"Erreur: Fichier manquant - {e}")
         return
 
-    # Préparer le repo du wiki
     preparer_repo_wiki()
 
-    # --- Génération de la page d'accueil (Home.md) ---
-    home_content = ["# Suivi des Prix LEGO\n\n"]
+    home_content = ["# Suivi des Prix LEGO\n\n", "Mis à jour le : " + datetime.now().strftime('%d/%m/%Y à %H:%M') + "\n"]
     
-    # --- Génération des pages de détail ---
-    sets_uniques = df_config['ID_Set'].unique()
-
-    for id_set in sets_uniques:
-        # Infos du set
-        config_set = df_config[df_config['ID_Set'] == str(id_set)].iloc[0]
+    # On boucle directement sur chaque ligne de la configuration
+    for index, config_set in df_config.iterrows():
+        id_set = config_set['ID_Set']
         nom_set = config_set['Nom_Set']
-        image_url = config_set['Image_URL']
-        
-        # Historique des prix pour ce set
-        df_set_history = df_prix[df_prix['ID_Set'] == str(id_set)].copy()
+        image_url = config_set.get('Image_URL', '') # Utiliser .get pour éviter une erreur si la colonne manque
+
+        df_set_history = df_prix[df_prix['ID_Set'] == id_set].copy()
         
         if df_set_history.empty:
+            print(f"Aucun historique de prix pour le set {id_set} ({nom_set}). Il sera ignoré.")
             continue
 
-        # Trouver le prix actuel le plus bas
         dernier_scan = df_set_history.sort_values('Date').groupby('Site').last().reset_index()
         meilleur_prix_actuel = dernier_scan['Prix'].min()
         site_meilleur_prix = dernier_scan[dernier_scan['Prix'] == meilleur_prix_actuel]['Site'].iloc[0]
 
-        # Nom de fichier propre pour la page de détail
-        nom_fichier_page = f"{id_set}-{nom_set.replace(' ', '-').replace('™', '')}.md"
+        nom_fichier_page = f"{id_set}-{nom_set.replace(' ', '-').replace('™', '').replace(':', '').replace('’', '')}.md"
         
-        # Ajouter à la page d'accueil
-        home_content.append(f"## [{nom_set}]({nom_fichier_page})")
-        home_content.append(f"**Meilleur prix actuel : {meilleur_prix_actuel}€** sur *{site_meilleur_prix}*")
-        home_content.append(f"[<img src='{image_url}' width='200' alt='Image de {nom_set}'>]({nom_fichier_page})\n")
+        home_content.append(f"## [{nom_set}]({nom_fichier_page.replace(' ', '%20')})")
+        home_content.append(f"**Meilleur prix actuel : {meilleur_prix_actuel:.2f}€** sur *{site_meilleur_prix}*")
+        if image_url:
+            home_content.append(f"[<img src='{image_url}' width='200' alt='Image de {nom_set}'>]({nom_fichier_page.replace(' ', '%20')})\n")
 
-        # Générer le graphique
         chemin_graphique_relatif = generer_graphique(df_set_history, id_set)
         
-        # Contenu de la page de détail
         page_detail_content = [f"# {nom_set} ({id_set})\n"]
-        page_detail_content.append(f"![Image de {nom_set}]({image_url})\n")
+        if image_url:
+            page_detail_content.append(f"![Image de {nom_set}]({image_url})\n")
         page_detail_content.append("## Évolution des prix\n")
         page_detail_content.append(f"![Graphique d'évolution des prix](./{chemin_graphique_relatif})\n")
         
-        # Écrire le fichier de la page de détail
         with open(os.path.join(WIKI_LOCAL_PATH, nom_fichier_page), 'w', encoding='utf-8') as f:
             f.write("\n".join(page_detail_content))
         print(f"Page de détail générée : {nom_fichier_page}")
 
-    # Écrire le fichier de la page d'accueil
     with open(os.path.join(WIKI_LOCAL_PATH, "Home.md"), 'w', encoding='utf-8') as f:
         f.write("\n".join(home_content))
     print("Page d'accueil 'Home.md' générée.")

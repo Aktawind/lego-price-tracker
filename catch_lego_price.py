@@ -39,30 +39,9 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 '''
 
 CONFIG_SITES = {   
-    "Amazon": {
-        "type": "amazon_selenium",
-        "selecteur": None,
-        "timeout": 15 # On donne plus de temps à Amazon
-    },
-    "Lego": {
-        "type": "standard",
-        "selecteur": '[data-test="product-price"]'
-    },
-    "Auchan": {
-        "type": "standard",
-        "selecteur": ".product-price"
-    },
     "Leclerc": {
         "type": "standard",
         "selecteur": ".egToM .visually-hidden"
-    },
-    "Carrefour": {
-        "type": "eclate_selenium", 
-        "selecteur": { 
-            "euros": ".product-price__content.c-text--size-m",
-            "centimes": ".product-price__content.c-text--size-s"
-        },
-        "timeout": 10
     }
 }
 
@@ -122,7 +101,7 @@ SETS_A_SURVEILLER = charger_configuration_sets('config_sets.xlsx', CONFIG_SITES)
 FICHIER_EXCEL = "prix_lego.xlsx"
 EMAIL_ADRESSE = os.getenv('GMAIL_ADDRESS')
 EMAIL_MOT_DE_PASSE = os.getenv('GMAIL_APP_PASSWORD')
-EMAIL_DESTINATAIRE = os.getenv('MAIL_DESTINATAIRE')
+EMAIL_DESTINATAIRE = os.getenv("'MAIL_DESTINATAIRE_TEST'")
 
 # Vérification que la configuration des sets a été chargée correctement
 if not SETS_A_SURVEILLER:
