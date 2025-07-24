@@ -112,8 +112,7 @@ def generer_pages_wiki():
         seuil_bonne_affaire = prix_juste * SEUIL_BONNE_AFFAIRE if prix_juste else None
         
         # --- Génération des noms de page et liens ---
-        nom_set_nettoye = re.sub(r'[^a-zA-Z0-9]', '-', nom_set).strip('-')
-        nom_fichier_page = f"{id_set}-{nom_set}.md"
+        nom_fichier_page = f"{id_set}-{nom_set.replace(' ', '-')}.md"
         lien_wiki = nom_fichier_page[:-3] # On enlève le .md pour le lien
 
         # --- Page d'accueil ---
