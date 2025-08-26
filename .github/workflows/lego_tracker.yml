@@ -42,9 +42,9 @@ jobs:
           python config_generator.py
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          git add config_sets.xlsx *.txt
+          git add .
           if ! git diff --cached --quiet; then
-            git commit -m "feat(config): Automatically update sets from .txt files"
+            git commit -m "Automatically update sets from .txt files"
             git push
           else
             echo "No new set configuration to commit."
