@@ -55,17 +55,44 @@ EMAIL_DESTINATAIRE = os.getenv('MAIL_DESTINATAIRE')
 
 # --- FONCTIONS UTILITAIRES ---
 
-def charger_configuration_sets(fichier_config):
-    """Lit le fichier de configuration Excel au format 'large'."""
+def charger_configuration_sets(fichier_config, config_sites_dict):
+    """
+    Lit le fichier de configuration Excel au format "large" et le transforme en dictionnaire.
+    Prend en argument le chemin du fichier et le dictionnaire de configuration des sites.
+    """
     try:
         df = pd.read_excel(fichier_config, dtype=str)
         df.fillna('', inplace=True)
-        return df
+        
+        sets_a_surveiller = {}
+        for index, row in df.iterrows():
+            set_id = row['ID_Set']
+            
+            sets_a_surveiller[set_id] = {
+                "nom": row['Nom_Set'],
+                "sites": {}
+            }
+            
+            # On utilise le dictionnaire passé en argument
+            for site_nom, site_config in config_sites_dict.items():
+                colonne_url = f"URL_{site_nom}"
+                
+                if colonne_url in row and row[colonne_url]:
+                    site_info = site_config.copy()
+                    site_info['url'] = row[colonne_url]
+                    
+                    sets_a_surveiller[set_id]['sites'][site_nom] = site_info
+                    
+        return sets_a_surveiller
+
     except FileNotFoundError:
-        logging.error(f"Fichier de configuration '{fichier_config}' introuvable.")
+        logging.error(f"Erreur: Fichier de configuration '{fichier_config}' est introuvable.")
+        return None
+    except KeyError as e:
+        logging.error(f"Erreur de configuration: Colonne manquante dans '{fichier_config}': {e}")
         return None
     except Exception as e:
-        logging.error(f"Erreur lors de la lecture de '{fichier_config}': {e}")
+        logging.error(f"Erreur lors de la lecture du fichier de configuration Excel: {e}")
         return None
 
 def regrouper_taches_par_site(df_config):
