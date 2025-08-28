@@ -272,27 +272,7 @@ def verifier_les_prix():
             try:
                 driver = creer_driver_selenium(scraper_type)
                 # Logique de préparation de session (ex: localisation Amazon)
-                if scraper_type == "amazon":
-                    pays_actuel = obtenir_localisation_ip()
-                    if pays_actuel and pays_actuel != 'FR':
-                        logging.info(f"IP non-française ({pays_actuel}) détectée. Forçage de la localisation pour Amazon...")
-                        try:
-                            driver.get("https://www.amazon.fr/")
-                            wait = WebDriverWait(driver, 10)
-                            bouton_localisation = wait.until(EC.element_to_be_clickable((By.ID, "nav-global-location-popover-link")))
-                            bouton_localisation.click()
-                            champ_postal = wait.until(EC.visibility_of_element_located((By.ID, "GLUXZipUpdateInput")))
-                            champ_postal.send_keys("38540")
-                            bouton_actualiser = driver.find_element(By.CSS_SELECTOR, '[data-action="GLUXPostalUpdateAction"] input')
-                            bouton_actualiser.click()
-                            wait.until(EC.staleness_of(bouton_actualiser))
-                            logging.info("Localisation française pour Amazon forcée avec succès.")
-                            time.sleep(2)
-                        except Exception as e:
-                            logging.warning(f"La procédure de forçage de localisation pour Amazon a échoué : {e}")
-                    else:
-                        logging.info("IP française (ou non détectée), pas de forçage de localisation nécessaire pour Amazon.")
-
+                
             except Exception as e:
                 logging.error(f"Impossible de démarrer/préparer Selenium pour {site}: {e}")
                 if driver: driver.quit()
