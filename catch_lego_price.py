@@ -7,7 +7,7 @@ from email.mime.text import MIMEText
 import urllib3
 import os
 import logging
-import re
+from config_shared import PRIX_MOYEN_PAR_COLLECTION, SEUIL_BONNE_AFFAIRE, SEUIL_TRES_BONNE_AFFAIRE
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -43,14 +43,6 @@ CONFIG_SITES = {
     },
     "Brickmo": { "type": "brickmo", "use_selenium": False },
 }
-
-# Dictionnaire de connaissance des prix moyens par pièce
-PRIX_MOYEN_PAR_COLLECTION = {
-    "Star Wars": 0.130, "Technic": 0.117, "Disney": 0.108,
-    "Super Mario": 0.101, "Ideas": 0.096, "Icons": 0.092,
-    "Botanicals": 0.085, "default": 0.100
-}
-SEUIL_BONNE_AFFAIRE = 0.85
 
 # Fichiers
 FICHIER_EXCEL = "prix_lego.xlsx"
@@ -120,7 +112,6 @@ def creer_driver_selenium(scraper_type="standard"):
 def envoyer_email_recapitulatif(baisses_de_prix):
     """
     Prend une liste de baisses de prix et envoie un seul email de résumé
-    avec une belle mise en page HTML, mais SANS images intégrées.
     """
     
     nombre_baisses = len(baisses_de_prix)
@@ -143,20 +134,21 @@ def envoyer_email_recapitulatif(baisses_de_prix):
     """
     
     for deal in baisses_de_prix:
-        # Construction de la version TEXTE (inchangée)
-        message_bonne_affaire_txt = "\n   >> C'est une bonne affaire ! 🟢" if deal.get('bonne_affaire') else ""
+        message_affaire = ""
+        if deal.get('analyse_affaire') == "tres_bonne":
+            message_affaire = "\n   >> C'est une TRÈS bonne affaire ! 🔥🔥🔥"
+        elif deal.get('analyse_affaire') == "bonne":
+            message_affaire = "\n   >> C'est une bonne affaire ! ✅✅"
+
         text_body += (
             f"--------------------\n"
             f"Set: {deal['nom_set']}\n"
             f"Site: {deal['site']}\n"
             f"Ancien Prix: {deal['prix_precedent']:.2f}€\n"
-            f"NOUVEAU PRIX: {deal['nouveau_prix']:.2f}€{message_bonne_affaire_txt}\n"
+            f"NOUVEAU PRIX: {deal['nouveau_prix']:.2f}€{message_affaire}\n"
             f"Lien: {deal['url']}\n"
         )
-
-        # Construction de la version HTML (simplifiée, sans images)
-        message_bonne_affaire_html = "<br>   <b>>> C'est une bonne affaire ! ✅✅</b>" if deal.get('bonne_affaire') else ""
-        
+      
         html_body += f"""
         <hr>
         <div style="padding: 10px;">
@@ -165,7 +157,7 @@ def envoyer_email_recapitulatif(baisses_de_prix):
                 <b>Site:</b> {deal['site']}<br>
                 <b>Ancien Prix:</b> {deal['prix_precedent']:.2f}€<br>
                 <b style="color:green; font-size: 1.1em;">NOUVEAU PRIX: {deal['nouveau_prix']:.2f}€</b>
-                {message_bonne_affaire_html}
+                {message_affaire}
             </p>
             <p><a href="{deal['url']}" style="background-color: #007bff; color: white; padding: 8px 12px; text-decoration: none; border-radius: 5px;">Voir l'offre</a></p>
         </div>
@@ -267,31 +259,29 @@ def verifier_les_prix():
                 if prix_precedent is not None and prix_actuel < prix_precedent:
                     logging.info("BAISSE DE PRIX ! Ajout à la liste de notification.")
                     
-                    is_bonne_affaire = False
+                    analyse_affaire = "standard" # Par défaut
                     try:
-                        # On récupère les infos de configuration pour ce set
                         config_set_row = df_config.loc[df_config['ID_Set'] == tache['id_set']].iloc[0]
                         nb_pieces = pd.to_numeric(config_set_row.get('nbPieces'), errors='coerce')
                         collection = config_set_row.get('Collection', 'default')
-                        image_url = config_set_row.get('Image_URL', '') # On récupère l'URL de l'image
+                        image_url = config_set_row.get('Image_URL', '')
                         
                         if pd.notna(nb_pieces):
                             prix_moyen = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLLECTION['default'])
                             prix_juste = nb_pieces * prix_moyen
-                            seuil = prix_juste * SEUIL_BONNE_AFFAIRE
-                            if prix_actuel <= seuil:
-                                is_bonne_affaire = True
+                            
+                            if prix_actuel <= prix_juste * SEUIL_TRES_BONNE_AFFAIRE:
+                                analyse_affaire = "tres_bonne"
+                            elif prix_actuel <= prix_juste * SEUIL_BONNE_AFFAIRE:
+                                analyse_affaire = "bonne"
                     except IndexError:
-                        logging.warning(f"Impossible de trouver les infos de config pour le set {tache['id_set']} pour l'analyse de 'bonne affaire'.")
+                        logging.warning(f"Impossible de trouver les infos de config pour {tache['id_set']} pour l'analyse.")
 
                     baisses_de_prix_a_notifier.append({
-                        'nom_set': tache['nom_set'],
-                        'nouveau_prix': prix_actuel,
-                        'prix_precedent': prix_precedent,
-                        'site': site,
-                        'url': tache['url'],
-                        'bonne_affaire': is_bonne_affaire,
-                        'image_url': image_url
+                        'nom_set': tache['nom_set'], 'nouveau_prix': prix_actuel,
+                        'prix_precedent': prix_precedent, 'site': site, 'url': tache['url'],
+                        'image_url': image_url,
+                        'analyse_affaire': analyse_affaire # On passe le résultat de l'analyse
                     })
             else:
                 logging.info("Pas de changement de prix.")

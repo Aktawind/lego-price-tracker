@@ -22,8 +22,8 @@ DOMAIN_TO_COLUMN_MAP = {
     "auchan.fr": "URL_Auchan",
     "carrefour.fr": "URL_Carrefour",
     "e.leclerc": "URL_Leclerc",
-    "fnac.com": "URL_Fnac"
-    # Ajoutez d'autres domaines si nécessaire
+    "brickmo.com": "URL_Brickmo"
+    # Ajoutez d'autres domaines au besoin
 }
 def get_lego_metadata(set_id):
     """Scrape Lego.com pour récupérer les métadonnées d'un set en utilisant Selenium."""

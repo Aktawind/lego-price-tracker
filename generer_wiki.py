@@ -6,28 +6,14 @@ import git
 from datetime import datetime
 import re
 import logging
-import urllib.parse
 from matplotlib.dates import DateFormatter
+from config_shared import PRIX_MOYEN_PAR_COLLECTION, SEUIL_BONNE_AFFAIRE, SEUIL_TRES_BONNE_AFFAIRE
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-
-# Dictionnaire de connaissance des prix moyens par pièce
-PRIX_MOYEN_PAR_COLLECTION = {
-    "Star Wars"  : 0.130,
-    "Technic"    : 0.117,
-    "Disney"     : 0.108,
-    "Super Mario": 0.101,
-    "Ideas"      : 0.096,
-    "Icons"      : 0.092,
-    "Botanicals" : 0.085,
-    "default"    : 0.100
-}
-
-SEUIL_BONNE_AFFAIRE = 0.85 # 15% de réduction par rapport au prix moyen
 
 # --- CONFIGURATION ---
 FICHIER_PRIX = "prix_lego.xlsx"
@@ -127,9 +113,10 @@ def generer_pages_wiki(df_config):
         site_meilleur_prix = dernier_scan[dernier_scan['Prix'] == meilleur_prix_actuel]['Site'].iloc[0]
 
         # --- Calculs pour l'analyse de prix ---
-        prix_moyen_collection = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLLECTION['default'])
+        prix_moyen_collection = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLlection['default'])
         prix_juste = nb_pieces * prix_moyen_collection if pd.notna(nb_pieces) else None
-        seuil_bonne_affaire = prix_juste * SEUIL_BONNE_AFFAIRE if prix_juste else None
+        seuil_bonne = prix_juste * SEUIL_BONNE_AFFAIRE if prix_juste else None
+        seuil_tres_bonne = prix_juste * SEUIL_TRES_BONNE_AFFAIRE if prix_juste else None
         
         # --- Génération des noms de page et liens ---
         nom_fichier_page = f"{id_set}-{nom_set.replace(' ', '-')}.md"
@@ -137,10 +124,10 @@ def generer_pages_wiki(df_config):
 
         # --- Page d'accueil ---
         indicateur_deal = ""
-        if seuil_bonne_affaire and meilleur_prix_actuel <= seuil_bonne_affaire:
+        if seuil_tres_bonne and meilleur_prix_actuel <= seuil_tres_bonne:
+            indicateur_deal = "🔥🔥🔥"
+        elif seuil_bonne and meilleur_prix_actuel <= seuil_bonne:
             indicateur_deal = "✅✅"
-        elif prix_juste and meilleur_prix_actuel <= prix_juste:
-            indicateur_deal = "✅" 
 
         image_md = f"[<img src='{image_url}' width='100'>]({lien_wiki})" if image_url else ""
         set_md = f"**[{nom_set}]({lien_wiki})**<br>*{id_set}*"
@@ -158,7 +145,8 @@ def generer_pages_wiki(df_config):
             page_detail_content.append("## Analyse du Prix")
             page_detail_content.append(f"- **Collection :** {collection} ({prix_moyen_collection:.3f}€/pièce)")
             page_detail_content.append(f"- **Prix juste estimé :** {prix_juste:.0f}€")
-            page_detail_content.append(f"- **Seuil Bonne Affaire :** Un prix inférieur à **{seuil_bonne_affaire:.0f}€** est considéré comme un bon deal.")
+            page_detail_content.append(f"- **Seuil 'Bonne Affaire' :** < {seuil_bonne:.2f}€")
+            page_detail_content.append(f"- **Seuil 'TRÈS Bonne Affaire' :** < {seuil_tres_bonne:.2f}€")
             page_detail_content.append(f"- **Prix le plus bas enregistré :** {prix_plus_bas_jamais_vu:.2f}€\n")
 
             page_detail_content.append("## Prix Actuels par Site")
@@ -166,24 +154,26 @@ def generer_pages_wiki(df_config):
             page_detail_content.append("|:---|:---:|:---:|:---:|")
 
             for _, row in dernier_scan.iterrows():
-                    prix = row['Prix']
-                    site = row['Site']
+                prix = row['Prix']
+                site = row['Site']
 
-                    colonne_url = f"URL_{site.replace('.', '_')}" # ex: Lego.com -> URL_Lego_com
-                    url_produit = config_set.get(colonne_url, '#')
-                    site_md = f"[{site}]({url_produit})"
-                    
-                    analyse_emoji = ""
-                    ppp_actuel = prix / nb_pieces
-                    
-                    if ppp_actuel <= seuil_bonne_affaire / nb_pieces:
-                        analyse_emoji = "✅✅"
-                    elif ppp_actuel <= prix_moyen_collection:
-                        analyse_emoji = "✅"
-                    else:
-                        analyse_emoji = "❌"
-
-                    page_detail_content.append(f"| {site_md} | **{prix:.2f}€** | {ppp_actuel:.3f}€ | {analyse_emoji} |")
+                colonne_url = f"URL_{site.replace('.', '_')}" # ex: Lego.com -> URL_Lego_com
+                url_produit = config_set.get(colonne_url, '#')
+                site_md = f"[{site}]({url_produit})"
+                
+                analyse_emoji = ""
+                ppp_actuel = prix / nb_pieces
+                
+                if ppp_actuel <= prix_moyen_collection * SEUIL_TRES_BONNE_AFFAIRE:
+                    analyse_emoji = "TRÈS Bonne Affaire 🔥🔥🔥"
+                elif ppp_actuel <= prix_moyen_collection * SEUIL_BONNE_AFFAIRE:
+                    analyse_emoji = "Bonne Affaire ✅✅"
+                elif ppp_actuel <= prix_moyen_collection:
+                    analyse_emoji = "Prix Juste ✅"
+                else:
+                    analyse_emoji = "Élevé ❌"
+                
+                page_detail_content.append(f"| {site_md} | **{prix:.2f}€** | {ppp_actuel:.3f}€ | {analyse_emoji} |")
         else:
              # Gérer le cas où on n'a pas les infos de pièces
              page_detail_content.append("\n## Prix Actuels par Site")
