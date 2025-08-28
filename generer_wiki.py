@@ -113,7 +113,7 @@ def generer_pages_wiki(df_config):
         site_meilleur_prix = dernier_scan[dernier_scan['Prix'] == meilleur_prix_actuel]['Site'].iloc[0]
 
         # --- Calculs pour l'analyse de prix ---
-        prix_moyen_collection = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLlection['default'])
+        prix_moyen_collection = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLLECTION['default'])
         prix_juste = nb_pieces * prix_moyen_collection if pd.notna(nb_pieces) else None
         seuil_bonne = prix_juste * SEUIL_BONNE_AFFAIRE if prix_juste else None
         seuil_tres_bonne = prix_juste * SEUIL_TRES_BONNE_AFFAIRE if prix_juste else None
