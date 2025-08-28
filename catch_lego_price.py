@@ -271,7 +271,35 @@ def verifier_les_prix():
         if site_config.get("use_selenium", False):
             try:
                 driver = creer_driver_selenium(scraper_type)
-                # Logique de préparation de session (ex: localisation Amazon)
+                if scraper_type == "amazon":
+                    pays_actuel = obtenir_localisation_ip()
+                    if pays_actuel and pays_actuel != 'FR':
+                        logging.info(f"IP non-française ({pays_actuel}) détectée. Forçage de la localisation...")
+                        try:
+                            driver.get("https://www.amazon.fr/")
+                            wait = WebDriverWait(driver, 10)
+                            
+                            # === ON GÈRE LES COOKIES AVANT TOUT ===
+                            try:
+                                bouton_cookies = wait.until(EC.element_to_be_clickable((By.ID, "sp-cc-accept")))
+                                logging.info("  -> Bannière de cookies trouvée sur la page d'accueil. Clic...")
+                                bouton_cookies.click()
+                            except Exception:
+                                logging.info("  -> Pas de bannière de cookies sur la page d'accueil.")
+                            # ====================================
+
+                            bouton_localisation = wait.until(EC.element_to_be_clickable((By.ID, "nav-global-location-popover-link")))
+                            bouton_localisation.click()
+                            champ_postal = wait.until(EC.visibility_of_element_located((By.ID, "GLUXZipUpdateInput")))
+                            champ_postal.send_keys("38540")
+                            bouton_actualiser = driver.find_element(By.CSS_SELECTOR, '[data-action="GLUXPostalUpdateAction"] input')
+                            bouton_actualiser.click()
+                            wait.until(EC.staleness_of(bouton_actualiser))
+                            logging.info("Localisation française pour Amazon forcée avec succès.")
+                        except Exception as e:
+                            logging.warning(f"La procédure de forçage de localisation pour Amazon a échoué : {e}")
+                    else:
+                        logging.info("IP française, pas de forçage.")
                 
             except Exception as e:
                 logging.error(f"Impossible de démarrer/préparer Selenium pour {site}: {e}")

@@ -1,7 +1,7 @@
 import logging
 import re
 import time
-import requests # Nécessaire pour obtenir_localisation_ip
+import requests
 from bs4 import BeautifulSoup
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -21,34 +21,46 @@ def obtenir_localisation_ip():
         logging.error(f"Impossible de récupérer la localisation de l'IP: {e}")
         return None
 
-# --- SCRAPER PRINCIPAL POUR AMAZON ---
 def scrape(driver, url):
     wait = WebDriverWait(driver, 10)
     
     try:
-        # ÉTAPE 1 : FORCER LA LOCALISATION SI NÉCESSAIRE
-        pays_actuel = obtenir_localisation_ip()
-        if pays_actuel and pays_actuel != 'FR':
-            logging.info(f"IP non-française ({pays_actuel}) détectée. Forçage de la localisation...")
-            try:
-                driver.get("https://www.amazon.fr/") # Visiter la page d'accueil pour le contexte
-                bouton_localisation = wait.until(EC.element_to_be_clickable((By.ID, "nav-global-location-popover-link")))
-                bouton_localisation.click()
-                champ_postal = wait.until(EC.visibility_of_element_located((By.ID, "GLUXZipUpdateInput")))
-                champ_postal.send_keys("38540")
-                bouton_actualiser = driver.find_element(By.CSS_SELECTOR, '[data-action="GLUXPostalUpdateAction"] input')
-                bouton_actualiser.click()
-                wait.until(EC.staleness_of(bouton_actualiser))
-                logging.info("Localisation française pour Amazon forcée avec succès.")
-            except Exception as e:
-                logging.warning(f"La procédure de forçage de localisation pour Amazon a échoué : {e}")
-        else:
-            logging.info("IP française (ou non détectée), pas de forçage de localisation nécessaire.")
+        # === ÉTAPE 1 : PRÉPARATION DE LA SESSION (si c'est la première visite) ===
+        # On vérifie si la localisation a déjà été faite en regardant l'URL actuelle
+        if "amazon.fr" not in driver.current_url:
+            pays_actuel = obtenir_localisation_ip()
+            if pays_actuel and pays_actuel != 'FR':
+                logging.info(f"IP non-française ({pays_actuel}) détectée. Forçage de la localisation pour Amazon...")
+                try:
+                    driver.get("https://www.amazon.fr/")
+                    
+                    # 1a. Gérer les cookies EN PREMIER
+                    try:
+                        bouton_cookies = wait.until(EC.element_to_be_clickable((By.ID, "sp-cc-accept")))
+                        logging.info("  -> Bannière de cookies trouvée sur la page d'accueil. Clic...")
+                        bouton_cookies.click()
+                    except Exception:
+                        pass # Si pas de cookies, on continue
 
-        # ÉTAPE 2 : ALLER SUR LA PAGE PRODUIT
+                    # 1b. Gérer la localisation
+                    bouton_localisation = wait.until(EC.element_to_be_clickable((By.ID, "nav-global-location-popover-link")))
+                    bouton_localisation.click()
+                    champ_postal = wait.until(EC.visibility_of_element_located((By.ID, "GLUXZipUpdateInput")))
+                    champ_postal.send_keys("38540")
+                    bouton_actualiser = driver.find_element(By.CSS_SELECTOR, '[data-action="GLUXPostalUpdateAction"] input')
+                    bouton_actualiser.click()
+                    wait.until(EC.staleness_of(bouton_actualiser))
+                    logging.info("Localisation française pour Amazon forcée avec succès.")
+                    
+                except Exception as e:
+                    logging.warning(f"La procédure de forçage de localisation pour Amazon a échoué : {e}")
+            else:
+                logging.info("IP française (ou non détectée), pas de forçage de localisation nécessaire.")
+        
+        # === ÉTAPE 2 : SCRAPING DE LA PAGE PRODUIT ===
         driver.get(url)
 
-        # ÉTAPE 3 : GÉRER LES POPUPS SPÉCIFIQUES À LA PAGE PRODUIT
+        # On gère les popups qui peuvent apparaître sur la page produit elle-même
         try:
             continuer_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[text()='Continuer les achats']")))
             logging.info("  -> Page 'Continuer' détectée. Clic...")
@@ -57,14 +69,7 @@ def scrape(driver, url):
         except Exception:
             pass 
 
-        try:
-            bouton_cookies = wait.until(EC.element_to_be_clickable((By.ID, "sp-cc-accept")))
-            logging.info("  -> Bannière de cookies trouvée. Clic...")
-            bouton_cookies.click()
-        except Exception:
-            pass 
-        
-        # ÉTAPE 4 : RÉCUPÉRER LE PRIX
+        # Récupérer le prix
         wait.until(EC.visibility_of_element_located((By.ID, "corePrice_feature_div")))
         soup = BeautifulSoup(driver.page_source, 'html.parser')
         
