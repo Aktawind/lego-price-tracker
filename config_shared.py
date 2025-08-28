@@ -2,19 +2,19 @@
 
 # Dictionnaire de connaissance des prix moyens par pièce
 PRIX_MOYEN_PAR_COLLECTION = {
-    "Star Wars™": 0.129, 
-    "Technic": 0.126, 
-    "Disney™": 0.121,
-    "LEGO® Super Mario™": 0.101, 
-    "Ideas": 0.094, 
-    "LEGO® Icons": 0.088,
-    "The Botanical Collection": 0.067, 
-    "One Piece": 0.088,
-    "Architecture": 0.080,
-    "Art": 0.057,
-    "Harry Potter™": 0.100,
-    "Creator 3-en-1": 0.084,
-    "Speed Champions": 0.090,
+    "Architecture": 0.088,
+    "Art": 0.073,
+    "The Botanical Collection": 0.0817,
+    "Creator 3-en-1": 0.0835,
+    "Disney™": 0.102,
+    "Harry Potter™": 0.0941,
+    "LEGO® Icons": 0.0883,
+    "Ideas": 0.0940,
+    "One Piece": 0.0886,
+    "Speed Champions": 0.0886,
+    "Star Wars™": 0.1024, 
+    "LEGO® Super Mario™": 0.1108, 
+    "Technic": 0.1211, 
     "default": 0.100
 }
 
