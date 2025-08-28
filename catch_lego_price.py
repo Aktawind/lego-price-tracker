@@ -41,7 +41,7 @@ CONFIG_SITES = {
         "selecteur": { "euros": ".product-price__content.c-text--size-m", "centimes": ".product-price__content.c-text--size-s" },
         "use_selenium": True 
     },
-    "Brickmo": { "type": "brickmo", "use_selenium": False },
+    "Brickmo": { "type": "brickmo", "use_selenium": True },
 }
 
 # Fichiers
