@@ -55,44 +55,14 @@ EMAIL_DESTINATAIRE = os.getenv('MAIL_DESTINATAIRE')
 
 # --- FONCTIONS UTILITAIRES ---
 
-def charger_configuration_sets(fichier_config, config_sites_dict):
-    """
-    Lit le fichier de configuration Excel au format "large" et le transforme en dictionnaire.
-    Prend en argument le chemin du fichier et le dictionnaire de configuration des sites.
-    """
+def charger_configuration_sets_df(fichier_config):
+    """Lit simplement le fichier de configuration Excel et retourne un DataFrame."""
     try:
         df = pd.read_excel(fichier_config, dtype=str)
         df.fillna('', inplace=True)
-        
-        sets_a_surveiller = {}
-        for index, row in df.iterrows():
-            set_id = row['ID_Set']
-            
-            sets_a_surveiller[set_id] = {
-                "nom": row['Nom_Set'],
-                "sites": {}
-            }
-            
-            # On utilise le dictionnaire passé en argument
-            for site_nom, site_config in config_sites_dict.items():
-                colonne_url = f"URL_{site_nom}"
-                
-                if colonne_url in row and row[colonne_url]:
-                    site_info = site_config.copy()
-                    site_info['url'] = row[colonne_url]
-                    
-                    sets_a_surveiller[set_id]['sites'][site_nom] = site_info
-                    
-        return sets_a_surveiller
-
-    except FileNotFoundError:
-        logging.error(f"Erreur: Fichier de configuration '{fichier_config}' est introuvable.")
-        return None
-    except KeyError as e:
-        logging.error(f"Erreur de configuration: Colonne manquante dans '{fichier_config}': {e}")
-        return None
+        return df
     except Exception as e:
-        logging.error(f"Erreur lors de la lecture du fichier de configuration Excel: {e}")
+        logging.error(f"Erreur lors de la lecture de '{fichier_config}': {e}")
         return None
 
 def regrouper_taches_par_site(df_config):
@@ -243,38 +213,43 @@ def obtenir_localisation_ip():
 def verifier_les_prix():
     logging.info("Lancement de la vérification des prix")
     
-    # Charger la configuration des sets et l'historique des prix
-    df_config = charger_configuration_sets(FICHIER_CONFIG_EXCEL, CONFIG_SITES)
-    if df_config is None: 
-        logging.error("Impossible de charger la configuration des sets. Arrêt.")
+    # Étape 1 : Charger la configuration en tant que DataFrame pandas.
+    # C'est la source de vérité pour les tâches et les analyses.
+    try:
+        df_config = pd.read_excel(FICHIER_CONFIG_EXCEL, dtype=str)
+        df_config.fillna('', inplace=True)
+    except FileNotFoundError:
+        logging.error(f"Fichier de configuration '{FICHIER_CONFIG_EXCEL}' introuvable. Arrêt.")
+        return
+    except Exception as e:
+        logging.error(f"Erreur de lecture de '{FICHIER_CONFIG_EXCEL}': {e}")
         return
 
+    # Charger l'historique des prix
     try:
         df_historique = pd.read_excel(FICHIER_EXCEL, dtype={'ID_Set': str})
     except FileNotFoundError:
         logging.info("Fichier Excel d'historique non trouvé. Création d'un nouveau.")
         df_historique = pd.DataFrame(columns=['Date', 'ID_Set', 'Nom_Set', 'Site', 'Prix'])
     
-    # Préparer les en-têtes pour les requêtes `requests`
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
         'Accept-Language': 'fr-FR,fr;q=0.9'
     }
     
-    # Initialiser les listes pour les résultats
     lignes_a_ajouter = []
     baisses_de_prix_a_notifier = []
 
-    # Transformer la configuration en une liste de tâches groupées par site
+    # Étape 2 : Utiliser le DataFrame pour regrouper les tâches.
     taches_par_site = regrouper_taches_par_site(df_config)
 
-    # Dictionnaire qui fait le lien entre le type de config et la fonction scraper à appeler
+
+# Dictionnaire des scrapers (inchangé)
     SCRAPERS = {
         "amazon": scrapers.scrape_amazon,
         "carrefour": scrapers.scrape_carrefour,
-        "standard": scrapers.scrape_standard
-        # "fnac": scrapers.scrape_fnac,
-        # "brickmo": scrapers.scrape_brickmo
+        "standard": scrapers.scrape_standard,
+        # ... ajoutez vos autres scrapers ici
     }
 
     # Boucle principale : on traite les sites un par un
@@ -293,12 +268,10 @@ def verifier_les_prix():
             continue
 
         driver = None
-        # On ne démarre un navigateur que si le site est configuré pour utiliser Selenium
         if site_config.get("use_selenium", False):
             try:
                 driver = creer_driver_selenium(scraper_type)
-                
-                # Logique de préparation de session, exécutée une seule fois
+                # Logique de préparation de session (ex: localisation Amazon)
                 if scraper_type == "amazon":
                     pays_actuel = obtenir_localisation_ip()
                     if pays_actuel and pays_actuel != 'FR':
@@ -325,13 +298,12 @@ def verifier_les_prix():
                 if driver: driver.quit()
                 continue
 
-        # Boucle secondaire : on traite chaque produit pour le site actuel
+        # Boucle secondaire : on traite chaque produit
         for tache in taches:
             logging.info(f"Vérification de '{tache['nom_set']}'...")
             prix_actuel = None
             
             try:
-                # Préparation des arguments pour la fonction scraper
                 kwargs = {'url': tache['url']}
                 if driver:
                     kwargs['driver'] = driver
@@ -365,7 +337,9 @@ def verifier_les_prix():
                     logging.info("BAISSE DE PRIX ! Ajout à la liste de notification.")
                     
                     analyse_affaire = "standard"
+                    image_url = ''
                     try:
+                        # Étape 3 : Utiliser le même df_config pour l'analyse
                         config_set_row = df_config.loc[df_config['ID_Set'] == tache['id_set']].iloc[0]
                         nb_pieces = pd.to_numeric(config_set_row.get('nbPieces'), errors='coerce')
                         collection = config_set_row.get('Collection', 'default')
@@ -378,9 +352,8 @@ def verifier_les_prix():
                                 analyse_affaire = "tres_bonne"
                             elif prix_actuel <= prix_juste * SEUIL_BONNE_AFFAIRE:
                                 analyse_affaire = "bonne"
-                    except (IndexError, KeyError):
-                        logging.warning(f"Infos de config manquantes pour le set {tache['id_set']} pour l'analyse de 'bonne affaire'.")
-                        image_url = ''
+                    except IndexError:
+                        logging.warning(f"Infos de config manquantes pour le set {tache['id_set']} pour l'analyse.")
 
                     baisses_de_prix_a_notifier.append({
                         'nom_set': tache['nom_set'], 'nouveau_prix': prix_actuel,
@@ -391,12 +364,11 @@ def verifier_les_prix():
                 logging.info("Pas de changement de prix.")
             time.sleep(5)
         
-        # On ferme le navigateur après avoir traité toutes les URL pour ce site
         if driver:
             logging.info(f"Fermeture de la session Selenium pour {site}")
             driver.quit()
 
-    # Logique finale d'envoi d'email et de sauvegarde Excel
+    # Logique finale (inchangée)
     if baisses_de_prix_a_notifier:
         envoyer_email_recapitulatif(baisses_de_prix_a_notifier)
     if lignes_a_ajouter:
