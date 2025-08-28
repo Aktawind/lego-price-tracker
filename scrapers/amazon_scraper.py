@@ -7,10 +7,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 def scrape(driver, url):
-    """
-    Prend un driver Selenium déjà ouvert et scrape une seule page produit Amazon.
-    Gère les popups 'Continuer' et les cookies qui peuvent apparaître sur chaque page.
-    """
     wait = WebDriverWait(driver, 10)
     
     try:
@@ -22,14 +18,14 @@ def scrape(driver, url):
             continuer_button.click()
             wait.until(EC.presence_of_element_located((By.ID, "dp-container")))
         except Exception:
-            logging.info("  -> Pas de page 'Continuer' visible.")
+            pass # C'est normal si ce n'est pas là
 
         try:
             bouton_cookies = wait.until(EC.element_to_be_clickable((By.ID, "sp-cc-accept")))
             logging.info("  -> Bannière de cookies trouvée. Clic...")
             bouton_cookies.click()
         except Exception:
-            logging.info("  -> Pas de bannière de cookies visible.")
+            pass # C'est normal si ce n'est pas là
         
         wait.until(EC.visibility_of_element_located((By.ID, "corePrice_feature_div")))
         soup = BeautifulSoup(driver.page_source, 'html.parser')

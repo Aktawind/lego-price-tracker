@@ -216,8 +216,11 @@ def obtenir_localisation_ip():
 def verifier_les_prix():
     logging.info("Lancement de la vérification des prix")
     
-    df_config = charger_configuration_sets(FICHIER_CONFIG_EXCEL)
-    if df_config is None: return
+    # Charger la configuration des sets et l'historique des prix
+    df_config = charger_configuration_sets(FICHIER_CONFIG_EXCEL, CONFIG_SITES)
+    if df_config is None: 
+        logging.error("Impossible de charger la configuration des sets. Arrêt.")
+        return
 
     try:
         df_historique = pd.read_excel(FICHIER_EXCEL, dtype={'ID_Set': str})
@@ -225,90 +228,88 @@ def verifier_les_prix():
         logging.info("Fichier Excel d'historique non trouvé. Création d'un nouveau.")
         df_historique = pd.DataFrame(columns=['Date', 'ID_Set', 'Nom_Set', 'Site', 'Prix'])
     
-    headers = { 'User-Agent': 'Mozilla/5.0 ...', 'Accept-Language': 'fr-FR,fr;q=0.9' }
+    # Préparer les en-têtes pour les requêtes `requests`
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
+        'Accept-Language': 'fr-FR,fr;q=0.9'
+    }
     
+    # Initialiser les listes pour les résultats
     lignes_a_ajouter = []
     baisses_de_prix_a_notifier = []
+
+    # Transformer la configuration en une liste de tâches groupées par site
     taches_par_site = regrouper_taches_par_site(df_config)
 
+    # Dictionnaire qui fait le lien entre le type de config et la fonction scraper à appeler
+    SCRAPERS = {
+        "amazon": scrapers.scrape_amazon,
+        "carrefour": scrapers.scrape_carrefour,
+        "standard": scrapers.scrape_standard
+        # "fnac": scrapers.scrape_fnac,
+        # "brickmo": scrapers.scrape_brickmo
+    }
+
+    # Boucle principale : on traite les sites un par un
     for site, taches in taches_par_site.items():
         logging.info(f"--- Début du traitement pour le site : {site} ---")
+        
         site_config = CONFIG_SITES.get(site)
         if not site_config:
-            logging.error(f"Configuration manquante pour le site {site}")
+            logging.warning(f"Configuration manquante pour le site {site} dans CONFIG_SITES. Site ignoré.")
             continue
         
-        scraper_type = site_config['type']
-        
-        try:
-            scraper_function = getattr(scrapers, f"scrape_{scraper_type}")
-        except AttributeError:
-            logging.error(f"Aucun scraper trouvé pour le type '{scraper_type}' dans scrapers/__init__.py")
+        scraper_type = site_config.get('type')
+        scraper_function = SCRAPERS.get(scraper_type)
+        if not scraper_function:
+            logging.error(f"Aucun scraper trouvé pour le type '{scraper_type}'. Site ignoré.")
             continue
 
         driver = None
+        # On ne démarre un navigateur que si le site est configuré pour utiliser Selenium
         if site_config.get("use_selenium", False):
             try:
                 driver = creer_driver_selenium(scraper_type)
-
-                # Logique de localisation pour Amazon, faite une seule fois par session
+                
+                # Logique de préparation de session, exécutée une seule fois
                 if scraper_type == "amazon":
                     pays_actuel = obtenir_localisation_ip()
                     if pays_actuel and pays_actuel != 'FR':
                         logging.info(f"IP non-française ({pays_actuel}) détectée. Forçage de la localisation pour Amazon...")
                         try:
-                            # On va directement sur la page d'accueil pour que la popup soit disponible
                             driver.get("https://www.amazon.fr/")
                             wait = WebDriverWait(driver, 10)
-                            
-                            # 1. Cliquer sur le bouton de localisation
-                            bouton_localisation = wait.until(
-                                EC.element_to_be_clickable((By.ID, "nav-global-location-popover-link"))
-                            )
+                            bouton_localisation = wait.until(EC.element_to_be_clickable((By.ID, "nav-global-location-popover-link")))
                             bouton_localisation.click()
-                            
-                            # 2. Attendre que le champ du code postal dans la popup soit visible
-                            champ_postal = wait.until(
-                                EC.visibility_of_element_located((By.ID, "GLUXZipUpdateInput"))
-                            )
-                            
-                            # 3. Entrer le code postal français
+                            champ_postal = wait.until(EC.visibility_of_element_located((By.ID, "GLUXZipUpdateInput")))
                             champ_postal.send_keys("38540")
-                            
-                            # 4. Cliquer sur le bouton "Actualiser"
                             bouton_actualiser = driver.find_element(By.CSS_SELECTOR, '[data-action="GLUXPostalUpdateAction"] input')
                             bouton_actualiser.click()
-
-                            # 5. Attendre que la popup se ferme et que la page se mette à jour
                             wait.until(EC.staleness_of(bouton_actualiser))
                             logging.info("Localisation française pour Amazon forcée avec succès.")
-                            time.sleep(2) # Petite pause pour la stabilisation
+                            time.sleep(2)
                         except Exception as e:
                             logging.warning(f"La procédure de forçage de localisation pour Amazon a échoué : {e}")
                     else:
                         logging.info("IP française (ou non détectée), pas de forçage de localisation nécessaire pour Amazon.")
 
-                if scraper_type == "brickmo":
-                    logging.info("Préparation de la session pour Brickmo...")
-                    driver.get("https://www.brickmo.com/fr/")
-                    driver.add_cookie({'name': 'shop', 'value': '13'})
-                    logging.info("Cookie de localisation pour Brickmo ajouté.")
-                    # On peut même ajouter une petite pause pour être sûr
-                    time.sleep(2)
-
             except Exception as e:
-                logging.error(f"Impossible de démarrer Selenium pour {site}: {e}")
+                logging.error(f"Impossible de démarrer/préparer Selenium pour {site}: {e}")
                 if driver: driver.quit()
                 continue
 
+        # Boucle secondaire : on traite chaque produit pour le site actuel
         for tache in taches:
             logging.info(f"Vérification de '{tache['nom_set']}'...")
             prix_actuel = None
             
             try:
+                # Préparation des arguments pour la fonction scraper
                 kwargs = {'url': tache['url']}
-                if driver: kwargs['driver'] = driver
-                else: kwargs['headers'] = headers
+                if driver:
+                    kwargs['driver'] = driver
+                else:
+                    kwargs['headers'] = headers
                 
                 if 'selecteur' in tache and tache['selecteur']:
                     if isinstance(tache['selecteur'], dict):
@@ -318,7 +319,7 @@ def verifier_les_prix():
                 
                 prix_actuel = scraper_function(**kwargs)
             except Exception as e:
-                logging.error(f"Erreur inattendue lors du scraping de {tache['url']}: {e}")
+                logging.error(f"Erreur inattendue lors de l'appel du scraper pour {tache['url']}: {e}")
 
             if prix_actuel is None:
                 logging.warning("Prix non trouvé.")
@@ -336,7 +337,7 @@ def verifier_les_prix():
                 if prix_precedent is not None and prix_actuel < prix_precedent:
                     logging.info("BAISSE DE PRIX ! Ajout à la liste de notification.")
                     
-                    analyse_affaire = "standard" # Par défaut
+                    analyse_affaire = "standard"
                     try:
                         config_set_row = df_config.loc[df_config['ID_Set'] == tache['id_set']].iloc[0]
                         nb_pieces = pd.to_numeric(config_set_row.get('nbPieces'), errors='coerce')
@@ -346,35 +347,34 @@ def verifier_les_prix():
                         if pd.notna(nb_pieces):
                             prix_moyen = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLLECTION['default'])
                             prix_juste = nb_pieces * prix_moyen
-                            
                             if prix_actuel <= prix_juste * SEUIL_TRES_BONNE_AFFAIRE:
                                 analyse_affaire = "tres_bonne"
                             elif prix_actuel <= prix_juste * SEUIL_BONNE_AFFAIRE:
                                 analyse_affaire = "bonne"
-                    except IndexError:
-                        logging.warning(f"Impossible de trouver les infos de config pour {tache['id_set']} pour l'analyse.")
+                    except (IndexError, KeyError):
+                        logging.warning(f"Infos de config manquantes pour le set {tache['id_set']} pour l'analyse de 'bonne affaire'.")
+                        image_url = ''
 
                     baisses_de_prix_a_notifier.append({
                         'nom_set': tache['nom_set'], 'nouveau_prix': prix_actuel,
                         'prix_precedent': prix_precedent, 'site': site, 'url': tache['url'],
-                        'image_url': image_url,
-                        'analyse_affaire': analyse_affaire # On passe le résultat de l'analyse
+                        'image_url': image_url, 'analyse_affaire': analyse_affaire
                     })
             else:
                 logging.info("Pas de changement de prix.")
             time.sleep(5)
         
+        # On ferme le navigateur après avoir traité toutes les URL pour ce site
         if driver:
             logging.info(f"Fermeture de la session Selenium pour {site}")
             driver.quit()
 
+    # Logique finale d'envoi d'email et de sauvegarde Excel
     if baisses_de_prix_a_notifier:
         envoyer_email_recapitulatif(baisses_de_prix_a_notifier)
     if lignes_a_ajouter:
         df_a_ajouter = pd.DataFrame(lignes_a_ajouter)
         df_historique = pd.concat([df_historique, df_a_ajouter], ignore_index=True)
-        df_historique['ID_Set'] = df_historique['ID_Set'].astype(str)
-        df_historique['Prix'] = df_historique['Prix'].astype(float)
         df_historique.to_excel(FICHIER_EXCEL, index=False)
         logging.info(f"{len(lignes_a_ajouter)} modifications enregistrées dans le fichier Excel.")
 
