@@ -7,6 +7,7 @@ from email.mime.text import MIMEText
 import urllib3
 import os
 import logging
+import requests
 from config_shared import PRIX_MOYEN_PAR_COLLECTION, SEUIL_BONNE_AFFAIRE, SEUIL_TRES_BONNE_AFFAIRE
 
 from selenium import webdriver
@@ -181,6 +182,38 @@ def envoyer_email_recapitulatif(baisses_de_prix):
     except Exception as e:
         logging.error(f"Erreur lors de l'envoi de l'email récapitulatif : {e}")
 
+def obtenir_localisation_ip():
+    """
+    Interroge le service ipinfo.io pour connaître le code pays de l'adresse IP actuelle.
+    Retourne le code pays (ex: 'FR', 'US', 'IE') ou None en cas d'erreur.
+    """
+    try:
+        logging.info("Récupération de la localisation de l'IP...")
+        
+        # On fait un appel à l'API de ipinfo.io qui renvoie du JSON
+        reponse = requests.get("https://ipinfo.io/json", timeout=5)
+        
+        # Lève une exception si la requête a échoué (ex: statut 4xx ou 5xx)
+        reponse.raise_for_status()
+        
+        # On convertit la réponse JSON en dictionnaire Python
+        data = reponse.json()
+        
+        # On récupère la valeur de la clé 'country', avec 'N/A' comme valeur par défaut
+        pays = data.get('country', 'N/A')
+        
+        logging.info(f"Localisation détectée : Pays={pays}")
+        return pays
+        
+    except requests.exceptions.RequestException as e:
+        # Gère spécifiquement les erreurs de réseau (timeout, pas de connexion...)
+        logging.error(f"Impossible de contacter le service de localisation IP : {e}")
+        return None
+    except Exception as e:
+        # Gère toutes les autres erreurs possibles (JSON invalide, etc.)
+        logging.error(f"Erreur inattendue lors de la récupération de la localisation de l'IP : {e}")
+        return None
+    
 def verifier_les_prix():
     logging.info("Lancement de la vérification des prix")
     
@@ -218,7 +251,52 @@ def verifier_les_prix():
         if site_config.get("use_selenium", False):
             try:
                 driver = creer_driver_selenium(scraper_type)
-                # ... (votre logique de localisation pour Amazon, à faire une seule fois ici)
+
+                # Logique de localisation pour Amazon, faite une seule fois par session
+                if scraper_type == "amazon":
+                    pays_actuel = obtenir_localisation_ip()
+                    if pays_actuel and pays_actuel != 'FR':
+                        logging.info(f"IP non-française ({pays_actuel}) détectée. Forçage de la localisation pour Amazon...")
+                        try:
+                            # On va directement sur la page d'accueil pour que la popup soit disponible
+                            driver.get("https://www.amazon.fr/")
+                            wait = WebDriverWait(driver, 10)
+                            
+                            # 1. Cliquer sur le bouton de localisation
+                            bouton_localisation = wait.until(
+                                EC.element_to_be_clickable((By.ID, "nav-global-location-popover-link"))
+                            )
+                            bouton_localisation.click()
+                            
+                            # 2. Attendre que le champ du code postal dans la popup soit visible
+                            champ_postal = wait.until(
+                                EC.visibility_of_element_located((By.ID, "GLUXZipUpdateInput"))
+                            )
+                            
+                            # 3. Entrer le code postal français
+                            champ_postal.send_keys("38540")
+                            
+                            # 4. Cliquer sur le bouton "Actualiser"
+                            bouton_actualiser = driver.find_element(By.CSS_SELECTOR, '[data-action="GLUXPostalUpdateAction"] input')
+                            bouton_actualiser.click()
+
+                            # 5. Attendre que la popup se ferme et que la page se mette à jour
+                            wait.until(EC.staleness_of(bouton_actualiser))
+                            logging.info("Localisation française pour Amazon forcée avec succès.")
+                            time.sleep(2) # Petite pause pour la stabilisation
+                        except Exception as e:
+                            logging.warning(f"La procédure de forçage de localisation pour Amazon a échoué : {e}")
+                    else:
+                        logging.info("IP française (ou non détectée), pas de forçage de localisation nécessaire pour Amazon.")
+
+                if scraper_type == "brickmo":
+                    logging.info("Préparation de la session pour Brickmo...")
+                    driver.get("https://www.brickmo.com/fr/")
+                    driver.add_cookie({'name': 'shop', 'value': '13'})
+                    logging.info("Cookie de localisation pour Brickmo ajouté.")
+                    # On peut même ajouter une petite pause pour être sûr
+                    time.sleep(2)
+
             except Exception as e:
                 logging.error(f"Impossible de démarrer Selenium pour {site}: {e}")
                 if driver: driver.quit()
