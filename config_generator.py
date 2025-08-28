@@ -128,8 +128,8 @@ def process_set_file(file_path):
     return nouvelle_ligne
 
 def main():
-    # Chercher tous les fichiers .txt qui sont des nombres
-    set_files = [f for f in glob.glob("*.txt") if os.path.splitext(os.path.basename(f))[0].isdigit()]
+    # Chercher tous les fichiers qui sont des nombres
+    set_files = [f for f in os.listdir() if os.path.splitext(os.path.basename(f))[0].isdigit()]
 
     if not set_files:
         logging.info("Aucun nouveau fichier de set à traiter.")
