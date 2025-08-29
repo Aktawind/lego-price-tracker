@@ -128,7 +128,6 @@ def process_set_file(file_path):
     return nouvelle_ligne
 
 def main():
-    # Chercher tous les fichiers qui sont des nombres
     set_files = [f for f in os.listdir() if os.path.splitext(os.path.basename(f))[0].isdigit()]
 
     if not set_files:
@@ -140,36 +139,74 @@ def main():
         df_config = pd.read_excel(FICHIER_CONFIG_EXCEL, dtype=str)
     else:
         logging.info(f"Fichier '{FICHIER_CONFIG_EXCEL}' non trouvé. Un nouveau sera créé.")
-        # On s'assure que le DataFrame vide a les bonnes colonnes pour la concaténation
         colonnes = ["ID_Set", "Nom_Set", "nbPieces", "Collection", "Image_URL"] + list(DOMAIN_TO_COLUMN_MAP.values())
-        df_config = pd.DataFrame(columns=list(dict.fromkeys(colonnes))) # Garde l'ordre et les uniques
-        
-    lignes_a_traiter = []
-    for file_path in set_files:
-        nouvelle_ligne = process_set_file(file_path)
-        if nouvelle_ligne:
-            lignes_a_traiter.append(nouvelle_ligne)
-            
-    if not lignes_a_traiter:
-        logging.info("Aucun set n'a pu être traité avec succès.")
-        return
+        df_config = pd.DataFrame(columns=list(dict.fromkeys(colonnes)))
 
-    # Mettre à jour le DataFrame de configuration
-    nouveaux_sets_df = pd.DataFrame(lignes_a_traiter)
-    
-    # Supprimer les anciennes versions des sets si elles existent
-    ids_a_mettre_a_jour = nouveaux_sets_df['ID_Set'].tolist()
-    df_config = df_config[~df_config['ID_Set'].isin(ids_a_mettre_a_jour)]
-    
-    # Concaténer et sauvegarder
-    df_final = pd.concat([df_config, nouveaux_sets_df], ignore_index=True)
-    df_final.to_excel(FICHIER_CONFIG_EXCEL, index=False)
-    logging.info(f"Fichier '{FICHIER_CONFIG_EXCEL}' mis à jour avec {len(lignes_a_traiter)} set(s).")
-    
-    # Supprimer les fichiers .txt traités
+    config_changed = False
+
     for file_path in set_files:
+        set_id = os.path.splitext(os.path.basename(file_path))[0]
+        logging.info(f"--- Traitement du fichier pour le set ID: {set_id} ---")
+
+        with open(file_path, 'r', encoding='utf-8') as f:
+            urls = [line.strip() for line in f if line.strip()]
+
+        # Vérifier si le set existe déjà
+        ligne_existante_index = df_config.index[df_config['ID_Set'] == set_id].tolist()
+
+        if ligne_existante_index:
+            # --- LOGIQUE DE MISE À JOUR (FUSION) ---
+            logging.info(f"Le set {set_id} existe déjà. Fusion des nouvelles URL...")
+            index_a_modifier = ligne_existante_index[0]
+            
+            for url in urls:
+                url_assignee = False
+                for domain, column_name in DOMAIN_TO_COLUMN_MAP.items():
+                    if domain in url:
+                        # On met à jour la cellule correspondante dans la ligne existante
+                        df_config.loc[index_a_modifier, column_name] = url
+                        logging.info(f"  -> URL pour {domain} mise à jour.")
+                        url_assignee = True
+                        break
+                if not url_assignee:
+                    logging.warning(f"Domaine non reconnu pour l'URL : {url}")
+        else:
+            # --- LOGIQUE DE CRÉATION (INCHANGÉE) ---
+            logging.info(f"Nouveau set {set_id}. Récupération des métadonnées...")
+            metadata = get_lego_metadata(set_id)
+            if not metadata:
+                logging.error(f"Impossible de traiter {set_id}, les métadonnées n'ont pas pu être récupérées.")
+                continue
+
+            nouvelle_ligne = {
+                "ID_Set": set_id, "Nom_Set": metadata['nom'], "nbPieces": metadata['nb_pieces'],
+                "Collection": metadata['collection'], "Image_URL": metadata['image_url'],
+            }
+            urls.append(metadata['url_lego']) # On ajoute l'URL Lego à la liste à classer
+            
+            for url in urls:
+                url_assignee = False
+                for domain, column_name in DOMAIN_TO_COLUMN_MAP.items():
+                    if domain in url:
+                        nouvelle_ligne[column_name] = url
+                        url_assignee = True
+                        break
+                if not url_assignee:
+                    logging.warning(f"Domaine non reconnu pour l'URL : {url}")
+            
+            # On ajoute la nouvelle ligne au DataFrame
+            nouvelle_ligne_df = pd.DataFrame([nouvelle_ligne])
+            df_config = pd.concat([df_config, nouvelle_ligne_df], ignore_index=True)
+        
+        config_changed = True
         os.remove(file_path)
-        logging.info(f"Fichier '{file_path}' supprimé.")
+        logging.info(f"Fichier '{file_path}' traité et supprimé.")
+
+    if config_changed:
+        df_config.to_excel(FICHIER_CONFIG_EXCEL, index=False)
+        logging.info(f"Fichier '{FICHIER_CONFIG_EXCEL}' mis à jour.")
+    else:
+        logging.info("Aucun changement apporté à la configuration.")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
