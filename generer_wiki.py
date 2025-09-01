@@ -110,7 +110,7 @@ def generer_pages_wiki(df_config):
 
         dernier_scan = df_set_history.sort_values('Date').groupby('Site').last().reset_index()
         meilleur_prix_actuel = dernier_scan['Prix'].min()
-        site_meilleur_prix = dernier_scan[dernier_scan['Prix'] == meilleur_prix_actuel]['Site'].iloc[0]
+        site_meilleur_prix = dernier_scan.iloc[0]['Site'] # Le premier de la liste triée
 
         # --- Calculs pour l'analyse de prix ---
         prix_moyen_collection = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLLECTION['default'])

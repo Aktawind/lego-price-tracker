@@ -31,7 +31,7 @@ MAP_VENDEURS = {
     "e.leclerc": "Leclerc",
     "auchan": "Auchan",
     "carrefour": "Carrefour",
-    "la grande récré": "LaGrandeRecre",
+    "la grande récré": "La Grande Récré",
     "ltoys": "Ltoys",
     "lego": "Lego"
     # N'ajoutez que les vendeurs que vous voulez suivre !

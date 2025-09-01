@@ -199,6 +199,7 @@ def obtenir_localisation_ip():
 def verifier_les_prix():
     logging.info("Lancement de la vérification des prix")
     
+    # Charger les configurations et l'historique
     df_config = charger_configuration_sets_df(FICHIER_CONFIG_EXCEL)
     if df_config is None: return
 
@@ -214,60 +215,90 @@ def verifier_les_prix():
     
     lignes_a_ajouter = []
     baisses_de_prix_a_notifier = []
+    taches_traitees = set() # "Blacklist" des tâches déjà traitées
 
-    # === ÉTAPE 1 : CONSTRUIRE LA LISTE DE TÂCHES MANUELLES ===
-    taches_manuelles = regrouper_taches_par_site(df_config)
-
-    # === ÉTAPE 2 : CHARGER LES TÂCHES AUTOMATIQUES ===
+    # === ÉTAPE 1 : TRAITER LES DEALS D'AVENUE DE LA BRIQUE EN PRIORITÉ ===
+    logging.info("--- Début du traitement des deals d'Avenue de la Brique ---")
     try:
         with open('deals_du_jour.json', 'r', encoding='utf-8') as f:
             deals_avenue = json.load(f)
     except Exception:
         deals_avenue = {}
 
-    # === ÉTAPE 3 : FUSIONNER LES DEUX SOURCES ===
-    taches_finales = taches_manuelles.copy()
-    
     for set_id, offres in deals_avenue.items():
-        config_set_row = df_config.loc[df_config['ID_Set'] == set_id]
-        if config_set_row.empty: continue
-        nom_set = config_set_row.iloc[0]['Nom_Set']
+        config_set_row_df = df_config.loc[df_config['ID_Set'] == set_id]
+        if config_set_row_df.empty: continue
+        nom_set = config_set_row_df.iloc[0]['Nom_Set']
 
         for offre in offres:
             site = offre['site']
+            prix_actuel = offre['prix']
+            url_offre = offre['url']
             
-            # Si le site n'est pas déjà dans nos tâches, on l'ajoute
-            if site not in taches_finales:
-                taches_finales[site] = []
+            logging.info(f"Traitement de '{nom_set}' sur {site} (via Avenue)... Prix actuel : {prix_actuel}€")
             
-            # On vérifie si une tâche manuelle existe déjà pour ce set/site
-            tache_manuelle_existe = any(t['id_set'] == set_id for t in taches_finales[site])
+            df_filtre = df_historique[(df_historique['ID_Set'] == set_id) & (df_historique['Site'] == site)]
+            prix_precedent = df_filtre['Prix'].iloc[-1] if not df_filtre.empty else None
             
-            if not tache_manuelle_existe:
-                # Si non, on ajoute la tâche d'Avenue de la Brique
-                site_config = CONFIG_SITES.get(site)
-                if site_config:
-                    tache = site_config.copy()
-                    tache['url'] = offre['url']
-                    tache['id_set'] = set_id
-                    tache['nom_set'] = nom_set
-                    taches_finales[site].append(tache)
+            if prix_precedent is None or abs(prix_actuel - prix_precedent) > 0.01:
+                logging.info(f"Changement de prix détecté (précédent : {prix_precedent}€).")
+                nouvelle_ligne = {'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'ID_Set': set_id, 'Nom_Set': nom_set, 'Site': site, 'Prix': prix_actuel}
+                lignes_a_ajouter.append(nouvelle_ligne)
+                
+                if prix_precedent is not None and prix_actuel < prix_precedent:
+                    logging.info("BAISSE DE PRIX ! Ajout à la liste de notification.")
+                    
+                    analyse_affaire = "standard"
+                    image_url = ''
+                    try:
+                        # Étape 3 : Utiliser le même df_config pour l'analyse
+                        config_set_row = df_config.loc[df_config['ID_Set'] == tache['id_set']].iloc[0]
+                        nb_pieces = pd.to_numeric(config_set_row.get('nbPieces'), errors='coerce')
+                        collection = config_set_row.get('Collection', 'default')
+                        image_url = config_set_row.get('Image_URL', '')
+                        
+                        if pd.notna(nb_pieces):
+                            prix_moyen = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLLECTION['default'])
+                            prix_juste = nb_pieces * prix_moyen
+                            if prix_actuel <= prix_juste * SEUIL_TRES_BONNE_AFFAIRE:
+                                analyse_affaire = "tres_bonne"
+                            elif prix_actuel <= prix_juste * SEUIL_BONNE_AFFAIRE:
+                                analyse_affaire = "bonne"
+                    except IndexError:
+                        logging.warning(f"Infos de config manquantes pour le set {tache['id_set']} pour l'analyse.")
 
+                    baisses_de_prix_a_notifier.append({
+                        'nom_set': tache['nom_set'], 'nouveau_prix': prix_actuel,
+                        'prix_precedent': prix_precedent, 'site': site, 'url': tache['url'],
+                        'image_url': image_url, 'analyse_affaire': analyse_affaire
+                    })
+            else:
+                logging.info("Pas de changement de prix.")
+            time.sleep(5)
+
+            # On marque cette tâche comme "faite" pour ne pas la re-scraper
+            taches_traitees.add((set_id, site))
+
+    # === ÉTAPE 2 : TRAITER LES TÂCHES MANUELLES RESTANTES ===
+    taches_manuelles = regrouper_taches_par_site(df_config)
     SCRAPERS = { "amazon": scrapers.scrape_amazon, "carrefour": scrapers.scrape_carrefour, "standard": scrapers.scrape_standard }
 
-    # === ÉTAPE 4 : LANCER LE SCRAPING SUR LA LISTE FINALE ===
-    for site, taches in taches_finales.items():
+    for site, taches in taches_manuelles.items():
         logging.info(f"--- Début du traitement manuel pour : {site} ---")
-        site_config = CONFIG_SITES.get(site)
-        if not site_config:
-            logging.warning(f"Configuration manquante pour le site {site} dans CONFIG_SITES. Site ignoré.")
+        
+        # On filtre les tâches pour ne garder que celles qui n'ont pas été traitées
+        taches_a_faire = [t for t in taches if (t['id_set'], site) not in taches_traitees]
+        
+        if not taches_a_faire:
+            logging.info(f"Toutes les tâches pour {site} ont déjà été traitées via Avenue de la Brique. On ignore.")
             continue
+
+        site_config = CONFIG_SITES.get(site)
+        if not site_config: continue
         
         scraper_type = site_config.get('type')
         scraper_function = SCRAPERS.get(scraper_type)
-        if not scraper_function:
-            logging.error(f"Aucun scraper trouvé pour le type '{scraper_type}'. Site ignoré.")
-            continue
+        if not scraper_function: continue
 
         driver = None
         if site_config.get("use_selenium", False):
@@ -327,7 +358,7 @@ def verifier_les_prix():
                 continue
 
         # Boucle secondaire : on traite chaque produit
-        for tache in taches:
+        for tache in taches_a_faire:
             logging.info(f"Vérification de '{tache['nom_set']}'...")
             prix_actuel = None
 
@@ -393,7 +424,7 @@ def verifier_les_prix():
 
                     baisses_de_prix_a_notifier.append({
                         'nom_set': tache['nom_set'], 'nouveau_prix': prix_actuel,
-                        'prix_precedent': prix_precedent, 'site': site, 'url': tache['url'],
+                        'prix_precedent': prix_precedent, 'site': site, 'url': url_offre,
                         'image_url': image_url, 'analyse_affaire': analyse_affaire
                     })
             else:
@@ -404,62 +435,7 @@ def verifier_les_prix():
             logging.info(f"Fermeture de la session Selenium pour {site}")
             driver.quit()
 
-    # === Tâches Automatiques (Avenue de la Brique) ===
-    logging.info("--- Début du traitement des deals d'Avenue de la Brique ---")
-    try:
-        with open('deals_du_jour.json', 'r', encoding='utf-8') as f:
-            deals_avenue = json.load(f)
-    except Exception:
-        deals_avenue = {}
-
-    for set_id, offres in deals_avenue.items():
-        config_set_row_df = df_config.loc[df_config['ID_Set'] == set_id]
-        if config_set_row_df.empty: continue
-        nom_set = config_set_row_df.iloc[0]['Nom_Set']
-
-        for offre in offres:
-            site = offre['site']
-            prix_actuel = offre['prix']
-            url = offre['url']
-            
-            logging.info(f"Traitement de '{nom_set}' sur {site} (via Avenue)...")
-            
-            df_filtre = df_historique[(df_historique['ID_Set'] == set_id) & (df_historique['Site'] == site)]
-            prix_precedent = df_filtre['Prix'].iloc[-1] if not df_filtre.empty else None
-            
-            if prix_precedent is None or abs(prix_actuel - prix_precedent) > 0.01:
-                logging.info(f"Changement de prix détecté (précédent : {prix_precedent}€).")
-                nouvelle_ligne = {'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'ID_Set': set_id, 'Nom_Set': nom_set, 'Site': site, 'Prix': prix_actuel}
-                lignes_a_ajouter.append(nouvelle_ligne)
-                
-                if prix_precedent is not None and prix_actuel < prix_precedent:
-                    logging.info("BAISSE DE PRIX ! Ajout à la liste de notification.")
-                    
-                    analyse_affaire = "standard"
-                    image_url = ''
-                    try:
-                        config_set_row = df_config.loc[df_config['ID_Set'] == set_id].iloc[0]
-                        nb_pieces = pd.to_numeric(config_set_row.get('nbPieces'), errors='coerce')
-                        collection = config_set_row.get('Collection', 'default')
-                        image_url = config_set_row.get('Image_URL', '')
-                        
-                        if pd.notna(nb_pieces):
-                            prix_moyen = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLLECTION['default'])
-                            prix_juste = nb_pieces * prix_moyen
-                            if prix_actuel <= prix_juste * SEUIL_TRES_BONNE_AFFAIRE:
-                                analyse_affaire = "tres_bonne"
-                            elif prix_actuel <= prix_juste * SEUIL_BONNE_AFFAIRE:
-                                analyse_affaire = "bonne"
-                    except IndexError:
-                        logging.warning(f"Infos de config manquantes pour le set {set_id} pour l'analyse.")
-
-                    baisses_de_prix_a_notifier.append({
-                        'nom_set': nom_set, 'nouveau_prix': prix_actuel,
-                        'prix_precedent': prix_precedent, 'site': site, 'url': url, # Utiliser l'URL de l'offre
-                        'image_url': image_url, 'analyse_affaire': analyse_affaire
-                    })
-    
-    # Logique finale (inchangée)
+    # === ÉTAPE 3 : NOTIFICATION ET SAUVEGARDE FINALES ===
     if baisses_de_prix_a_notifier:
         envoyer_email_recapitulatif(baisses_de_prix_a_notifier)
     if lignes_a_ajouter:
