@@ -274,20 +274,19 @@ def verifier_les_prix():
                 if scraper_type == "amazon":
                     pays_actuel = obtenir_localisation_ip()
                     if pays_actuel and pays_actuel != 'FR':
-                        logging.info(f"IP non-française ({pays_actuel}) détectée. Forçage de la localisation...")
+                        logging.info(f"IP non-française ({pays_actuel}) détectée. Forçage de la localisation pour Amazon...")
                         try:
                             driver.get("https://www.amazon.fr/")
                             wait = WebDriverWait(driver, 10)
                             
-                            # === ON GÈRE LES COOKIES AVANT TOUT ===
+                            # On gère d'abord les cookies sur la page d'accueil
                             try:
                                 bouton_cookies = wait.until(EC.element_to_be_clickable((By.ID, "sp-cc-accept")))
-                                logging.info("  -> Bannière de cookies trouvée sur la page d'accueil. Clic...")
                                 bouton_cookies.click()
                             except Exception:
                                 logging.info("  -> Pas de bannière de cookies sur la page d'accueil.")
-                            # ====================================
 
+                            # Ensuite, on force la localisation
                             bouton_localisation = wait.until(EC.element_to_be_clickable((By.ID, "nav-global-location-popover-link")))
                             bouton_localisation.click()
                             champ_postal = wait.until(EC.visibility_of_element_located((By.ID, "GLUXZipUpdateInput")))
@@ -296,10 +295,15 @@ def verifier_les_prix():
                             bouton_actualiser.click()
                             wait.until(EC.staleness_of(bouton_actualiser))
                             logging.info("Localisation française pour Amazon forcée avec succès.")
+                            
                         except Exception as e:
-                            logging.warning(f"La procédure de forçage de localisation pour Amazon a échoué : {e}")
+                            # Si la localisation échoue, c'est une erreur critique pour Amazon
+                            logging.error(f"La procédure de forçage de localisation pour Amazon a échoué : {e}")
+                            driver.quit() # On ferme le driver
+                            continue # ON PASSE AU SITE SUIVANT
+                            
                     else:
-                        logging.info("IP française, pas de forçage.")
+                        logging.info("IP française (ou non détectée), pas de forçage nécessaire pour Amazon.")
                 
             except Exception as e:
                 logging.error(f"Impossible de démarrer/préparer Selenium pour {site}: {e}")
@@ -310,6 +314,14 @@ def verifier_les_prix():
         for tache in taches:
             logging.info(f"Vérification de '{tache['nom_set']}'...")
             prix_actuel = None
+
+             # On récupère l'URL brute et on la nettoie systématiquement
+            url_brute = tache['url']
+            url_propre = url_brute.strip().rstrip(':/')
+            
+            # On vérifie si l'URL a été modifiée pour le log
+            if url_brute != url_propre:
+                logging.info(f"  -> URL nettoyée : de '{url_brute}' à '{url_propre}'")
             
             try:
                 kwargs = {'url': tache['url']}
