@@ -8,6 +8,7 @@ import urllib3
 import os
 import logging
 import requests
+import json
 from config_shared import PRIX_MOYEN_PAR_COLLECTION, SEUIL_BONNE_AFFAIRE, SEUIL_TRES_BONNE_AFFAIRE
 
 from selenium import webdriver
@@ -17,38 +18,23 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium_stealth import stealth
 
-# On importe notre nouvelle boîte à outils de scrapers
+# On importe notre boîte à outils de scrapers
 import scrapers
 
 # --- CONFIGURATION GLOBALE ---
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Le "cerveau" qui sait quel type de scraper utiliser pour chaque site.
-# La clé (ex: "Amazon") doit correspondre au nom du site dans l'en-tête de colonne de l'Excel.
-CONFIG_SITES = {   
+CONFIG_SITES = {
     "Amazon": { "type": "amazon", "use_selenium": True },
     "Lego": { "type": "standard", "selecteur": '[data-test="product-price"]', "use_selenium": False },
     "Auchan": { "type": "standard", "selecteur": ".product-price", "use_selenium": False },
     "Leclerc": { "type": "standard", "selecteur": ".egToM .visually-hidden", "use_selenium": False },
-    "Carrefour": { 
-        "type": "carrefour", 
-        "selecteur": { "euros": ".product-price__content.c-text--size-m", "centimes": ".product-price__content.c-text--size-s" },
-        "use_selenium": True 
-    },
+    "Carrefour": { "type": "carrefour", "selecteur": { "euros": ".product-price__content.c-text--size-m", "centimes": ".product-price__content.c-text--size-s" }, "use_selenium": True },
+    # Ajoutez d'autres sites ici au besoin
 }
-
-# Fichiers
 FICHIER_EXCEL = "prix_lego.xlsx"
 FICHIER_CONFIG_EXCEL = 'config_sets.xlsx'
-
-# Identifiants Email (lus depuis les secrets GitHub ou un fichier .env local)
 EMAIL_ADRESSE = os.getenv('GMAIL_ADDRESS')
 EMAIL_MOT_DE_PASSE = os.getenv('GMAIL_APP_PASSWORD')
 EMAIL_DESTINATAIRE = os.getenv('MAIL_DESTINATAIRE')
@@ -133,9 +119,9 @@ def envoyer_email_recapitulatif(baisses_de_prix):
     for deal in baisses_de_prix:
         message_affaire = ""
         if deal.get('analyse_affaire') == "tres_bonne":
-            message_affaire = "\n   >> C'est une TRÈS bonne affaire ! 🔥🔥🔥"
+            message_affaire = "\n   >> C'est une TRÈS bonne affaire ! ??????"
         elif deal.get('analyse_affaire') == "bonne":
-            message_affaire = "\n   >> C'est une bonne affaire ! ✅✅"
+            message_affaire = "\n   >> C'est une bonne affaire ! ??"
 
         text_body += (
             f"--------------------\n"
@@ -213,23 +199,12 @@ def obtenir_localisation_ip():
 def verifier_les_prix():
     logging.info("Lancement de la vérification des prix")
     
-    # Étape 1 : Charger la configuration en tant que DataFrame pandas.
-    # C'est la source de vérité pour les tâches et les analyses.
-    try:
-        df_config = pd.read_excel(FICHIER_CONFIG_EXCEL, dtype=str)
-        df_config.fillna('', inplace=True)
-    except FileNotFoundError:
-        logging.error(f"Fichier de configuration '{FICHIER_CONFIG_EXCEL}' introuvable. Arrêt.")
-        return
-    except Exception as e:
-        logging.error(f"Erreur de lecture de '{FICHIER_CONFIG_EXCEL}': {e}")
-        return
+    df_config = charger_configuration_sets_df(FICHIER_CONFIG_EXCEL)
+    if df_config is None: return
 
-    # Charger l'historique des prix
     try:
         df_historique = pd.read_excel(FICHIER_EXCEL, dtype={'ID_Set': str})
     except FileNotFoundError:
-        logging.info("Fichier Excel d'historique non trouvé. Création d'un nouveau.")
         df_historique = pd.DataFrame(columns=['Date', 'ID_Set', 'Nom_Set', 'Site', 'Prix'])
     
     headers = {
@@ -240,22 +215,49 @@ def verifier_les_prix():
     lignes_a_ajouter = []
     baisses_de_prix_a_notifier = []
 
-    # Étape 2 : Utiliser le DataFrame pour regrouper les tâches.
-    taches_par_site = regrouper_taches_par_site(df_config)
+    # === ÉTAPE 1 : CONSTRUIRE LA LISTE DE TÂCHES MANUELLES ===
+    taches_manuelles = regrouper_taches_par_site(df_config)
 
+    # === ÉTAPE 2 : CHARGER LES TÂCHES AUTOMATIQUES ===
+    try:
+        with open('deals_du_jour.json', 'r', encoding='utf-8') as f:
+            deals_avenue = json.load(f)
+    except Exception:
+        deals_avenue = {}
 
-# Dictionnaire des scrapers (inchangé)
-    SCRAPERS = {
-        "amazon": scrapers.scrape_amazon,
-        "carrefour": scrapers.scrape_carrefour,
-        "standard": scrapers.scrape_standard,
-        # ... ajoutez vos autres scrapers ici
-    }
+    # === ÉTAPE 3 : FUSIONNER LES DEUX SOURCES ===
+    taches_finales = taches_manuelles.copy()
+    
+    for set_id, offres in deals_avenue.items():
+        config_set_row = df_config.loc[df_config['ID_Set'] == set_id]
+        if config_set_row.empty: continue
+        nom_set = config_set_row.iloc[0]['Nom_Set']
 
-    # Boucle principale : on traite les sites un par un
-    for site, taches in taches_par_site.items():
-        logging.info(f"--- Début du traitement pour le site : {site} ---")
-        
+        for offre in offres:
+            site = offre['site']
+            
+            # Si le site n'est pas déjà dans nos tâches, on l'ajoute
+            if site not in taches_finales:
+                taches_finales[site] = []
+            
+            # On vérifie si une tâche manuelle existe déjà pour ce set/site
+            tache_manuelle_existe = any(t['id_set'] == set_id for t in taches_finales[site])
+            
+            if not tache_manuelle_existe:
+                # Si non, on ajoute la tâche d'Avenue de la Brique
+                site_config = CONFIG_SITES.get(site)
+                if site_config:
+                    tache = site_config.copy()
+                    tache['url'] = offre['url']
+                    tache['id_set'] = set_id
+                    tache['nom_set'] = nom_set
+                    taches_finales[site].append(tache)
+
+    SCRAPERS = { "amazon": scrapers.scrape_amazon, "carrefour": scrapers.scrape_carrefour, "standard": scrapers.scrape_standard }
+
+    # === ÉTAPE 4 : LANCER LE SCRAPING SUR LA LISTE FINALE ===
+    for site, taches in taches_finales.items():
+        logging.info(f"--- Début du traitement manuel pour : {site} ---")
         site_config = CONFIG_SITES.get(site)
         if not site_config:
             logging.warning(f"Configuration manquante pour le site {site} dans CONFIG_SITES. Site ignoré.")
@@ -395,13 +397,68 @@ def verifier_les_prix():
                         'image_url': image_url, 'analyse_affaire': analyse_affaire
                     })
             else:
-                pass # Pas de changement de prix
+                logging.info("Pas de changement de prix.")
             time.sleep(5)
         
         if driver:
             logging.info(f"Fermeture de la session Selenium pour {site}")
             driver.quit()
 
+    # === Tâches Automatiques (Avenue de la Brique) ===
+    logging.info("--- Début du traitement des deals d'Avenue de la Brique ---")
+    try:
+        with open('deals_du_jour.json', 'r', encoding='utf-8') as f:
+            deals_avenue = json.load(f)
+    except Exception:
+        deals_avenue = {}
+
+    for set_id, offres in deals_avenue.items():
+        config_set_row_df = df_config.loc[df_config['ID_Set'] == set_id]
+        if config_set_row_df.empty: continue
+        nom_set = config_set_row_df.iloc[0]['Nom_Set']
+
+        for offre in offres:
+            site = offre['site']
+            prix_actuel = offre['prix']
+            url = offre['url']
+            
+            logging.info(f"Traitement de '{nom_set}' sur {site} (via Avenue)...")
+            
+            df_filtre = df_historique[(df_historique['ID_Set'] == set_id) & (df_historique['Site'] == site)]
+            prix_precedent = df_filtre['Prix'].iloc[-1] if not df_filtre.empty else None
+            
+            if prix_precedent is None or abs(prix_actuel - prix_precedent) > 0.01:
+                logging.info(f"Changement de prix détecté (précédent : {prix_precedent}€).")
+                nouvelle_ligne = {'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'ID_Set': set_id, 'Nom_Set': nom_set, 'Site': site, 'Prix': prix_actuel}
+                lignes_a_ajouter.append(nouvelle_ligne)
+                
+                if prix_precedent is not None and prix_actuel < prix_precedent:
+                    logging.info("BAISSE DE PRIX ! Ajout à la liste de notification.")
+                    
+                    analyse_affaire = "standard"
+                    image_url = ''
+                    try:
+                        config_set_row = df_config.loc[df_config['ID_Set'] == set_id].iloc[0]
+                        nb_pieces = pd.to_numeric(config_set_row.get('nbPieces'), errors='coerce')
+                        collection = config_set_row.get('Collection', 'default')
+                        image_url = config_set_row.get('Image_URL', '')
+                        
+                        if pd.notna(nb_pieces):
+                            prix_moyen = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLLECTION['default'])
+                            prix_juste = nb_pieces * prix_moyen
+                            if prix_actuel <= prix_juste * SEUIL_TRES_BONNE_AFFAIRE:
+                                analyse_affaire = "tres_bonne"
+                            elif prix_actuel <= prix_juste * SEUIL_BONNE_AFFAIRE:
+                                analyse_affaire = "bonne"
+                    except IndexError:
+                        logging.warning(f"Infos de config manquantes pour le set {set_id} pour l'analyse.")
+
+                    baisses_de_prix_a_notifier.append({
+                        'nom_set': nom_set, 'nouveau_prix': prix_actuel,
+                        'prix_precedent': prix_precedent, 'site': site, 'url': url, # Utiliser l'URL de l'offre
+                        'image_url': image_url, 'analyse_affaire': analyse_affaire
+                    })
+    
     # Logique finale (inchangée)
     if baisses_de_prix_a_notifier:
         envoyer_email_recapitulatif(baisses_de_prix_a_notifier)
