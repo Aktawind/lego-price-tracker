@@ -78,12 +78,14 @@ def generer_graphique(df_set_history, id_set):
     return f"images/graph_{id_set}.png"
 
 # --- GÉNÉRATION DES PAGES WIKI ---
-def generer_pages_wiki(df_config):
+# REMPLACEZ VOTRE FONCTION generer_pages_wiki PAR CELLE-CI
+
+def generer_pages_wiki(df_config): # La fonction reçoit bien df_config
     logging.info("Début de la génération des pages du Wiki...")
     
     try:
         df_prix = pd.read_excel(FICHIER_PRIX, dtype={'ID_Set': str})
-        df_config = pd.read_excel(FICHIER_CONFIG, dtype={'ID_Set': str})
+        # On ne recharge PAS df_config ici, on utilise celui passé en argument
         df_prix['Date'] = pd.to_datetime(df_prix['Date']).dt.normalize()
     except FileNotFoundError as e:
         logging.error(f"Erreur: Fichier manquant - {e}")
@@ -102,30 +104,30 @@ def generer_pages_wiki(df_config):
         nb_pieces = pd.to_numeric(config_set.get('nbPieces'), errors='coerce')
         collection = config_set.get('Collection', 'default')
 
-        df_set_history = df_prix[df_prix['ID_Set'] == id_set].copy()
+        sites_configures = [col.split('_', 1)[1] for col in df_config.columns if col.startswith("URL_") and config_set[col]]
+        df_set_history = df_prix[(df_prix['ID_Set'] == id_set) & (df_prix['Site'].isin(sites_configures))].copy()
         
         if df_set_history.empty:
-            logging.warning(f"Aucun historique de prix pour {id_set}. Ignoré.")
+            logging.warning(f"Aucun historique de prix pour les sites configurés du set {id_set}. Ignoré.")
             continue
 
         dernier_scan = df_set_history.sort_values('Date').groupby('Site').last().reset_index()
-        meilleur_prix_actuel = dernier_scan['Prix'].min()
-        site_meilleur_prix = dernier_scan.iloc[0]['Site'] # Le premier de la liste triée
+        dernier_scan_trie = dernier_scan.sort_values('Prix', ascending=True)
 
-        # --- Calculs pour l'analyse de prix ---
+        meilleur_prix_actuel = dernier_scan_trie['Prix'].min()
+        site_meilleur_prix = dernier_scan_trie.iloc[0]['Site']
+
         prix_moyen_collection = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLLECTION['default'])
         prix_juste = nb_pieces * prix_moyen_collection if pd.notna(nb_pieces) else None
         seuil_bonne = prix_juste * SEUIL_BONNE_AFFAIRE if prix_juste else None
         seuil_tres_bonne = prix_juste * SEUIL_TRES_BONNE_AFFAIRE if prix_juste else None
         
-        # --- Génération des noms de page et liens ---
         nom_fichier_page = f"{id_set}-{nom_set.replace(' ', '-')}.md"
-        lien_wiki = nom_fichier_page[:-3] # On enlève le .md pour le lien
+        lien_wiki = nom_fichier_page[:-3]
 
-        # --- Page d'accueil ---
         indicateur_deal = ""
         if seuil_tres_bonne and meilleur_prix_actuel <= seuil_tres_bonne:
-            indicateur_deal = "🔥🔥🔥"
+            indicateur_deal = "🔥🔥"
         elif seuil_bonne and meilleur_prix_actuel <= seuil_bonne:
             indicateur_deal = "✅✅"
 
@@ -135,17 +137,16 @@ def generer_pages_wiki(df_config):
         home_content.append(f"| {image_md} | {set_md} | {prix_md} |")
 
         # --- Pages de détail ---
-        chemin_graphique = generer_graphique(df_set_history, id_set)
-        #page_detail_content = [f"# {nom_set} ({id_set})"]
-        page_detail_content = [f"<img src='{image_url}' alt='Image de {nom_set}' width='400'>\n"]
+        # On remet le titre ET l'image
+        page_detail_content = [f"# {nom_set} ({id_set})"]
+        if image_url: page_detail_content.append(f"<img src='{image_url}' alt='Image de {nom_set}' width='400'>\n")
         
-        # Section d'analyse
         if prix_juste:
             prix_plus_bas_jamais_vu = df_set_history['Prix'].min()
             page_detail_content.append("## Analyse du Prix")
             page_detail_content.append(f"- **Collection :** {collection}")
             page_detail_content.append(f"- **Nombre de pièces :** {int(nb_pieces)}")
-            page_detail_content.append(f"- **Prix juste estimé :** {prix_juste:.0f}€")
+            page_detail_content.append(f"- **Prix juste estimé :** {prix_juste:.2f}€ ({prix_moyen_collection:.3f}€/pièce)")
             page_detail_content.append(f"- **Seuil Bonne Affaire :** < {seuil_bonne:.2f}€")
             page_detail_content.append(f"- **Seuil TRÈS Bonne Affaire :** < {seuil_tres_bonne:.2f}€")
             page_detail_content.append(f"- **Prix le plus bas enregistré :** {prix_plus_bas_jamais_vu:.2f}€\n")
@@ -154,33 +155,26 @@ def generer_pages_wiki(df_config):
             page_detail_content.append("| Site | Prix Actuel | Prix par Pièce | Analyse |")
             page_detail_content.append("|:---|:---:|:---:|:---:|")
 
-            for _, row in dernier_scan.iterrows():
+            # On boucle sur la version TRIÉE du tableau
+            for _, row in dernier_scan_trie.iterrows():
                 prix = row['Prix']
                 site = row['Site']
-
-                colonne_url = f"URL_{site.replace('.', '_')}" # ex: Lego.com -> URL_Lego_com
+                colonne_url = f"URL_{site.replace('.', '_')}"
                 url_produit = config_set.get(colonne_url, '#')
                 site_md = f"[{site}]({url_produit})"
                 
-                analyse_emoji = ""
                 ppp_actuel = prix / nb_pieces
-                
-                if ppp_actuel <= prix_moyen_collection * SEUIL_TRES_BONNE_AFFAIRE:
-                    analyse_emoji = "TRÈS Bonne Affaire 🔥🔥🔥"
-                elif ppp_actuel <= prix_moyen_collection * SEUIL_BONNE_AFFAIRE:
-                    analyse_emoji = "Bonne Affaire ✅✅"
-                elif ppp_actuel <= prix_moyen_collection:
-                    analyse_emoji = "Prix Juste ✅"
-                else:
-                    analyse_emoji = "Élevé ❌"
+                if ppp_actuel <= prix_moyen_collection * SEUIL_TRES_BONNE_AFFAIRE: analyse_emoji = "TRÈS Bonne Affaire 🔥🔥🔥"
+                elif ppp_actuel <= prix_moyen_collection * SEUIL_BONNE_AFFAIRE: analyse_emoji = "Bonne Affaire ✅✅"
+                elif ppp_actuel <= prix_moyen_collection: analyse_emoji = "Prix Juste ✅"
+                else: analyse_emoji = "Élevé ❌"
                 
                 page_detail_content.append(f"| {site_md} | **{prix:.2f}€** | {ppp_actuel:.3f}€ | {analyse_emoji} |")
         else:
-             # Gérer le cas où on n'a pas les infos de pièces
              page_detail_content.append("\n## Prix Actuels par Site")
              page_detail_content.append("| Site | Prix Actuel |")
              page_detail_content.append("|:---|:---:|")
-             for _, row in dernier_scan.iterrows():
+             for _, row in dernier_scan_trie.iterrows(): # On utilise aussi la version triée ici
                  page_detail_content.append(f"| {row['Site']} | **{row['Prix']:.2f}€** |")
 
         chemin_graphique = generer_graphique(df_set_history, id_set)
