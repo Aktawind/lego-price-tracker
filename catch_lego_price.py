@@ -437,7 +437,7 @@ def verifier_les_prix():
 
                     baisses_de_prix_a_notifier.append({
                         'nom_set': tache['nom_set'], 'nouveau_prix': prix_actuel,
-                        'prix_precedent': prix_precedent, 'site': site, 'url': url_offre,
+                        'prix_precedent': prix_precedent, 'site': site, 'url': url_propre,
                         'image_url': image_url, 'analyse_affaire': analyse_affaire
                     })
             else:
