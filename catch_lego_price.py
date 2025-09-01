@@ -369,7 +369,7 @@ def verifier_les_prix():
                         'image_url': image_url, 'analyse_affaire': analyse_affaire
                     })
             else:
-                logging.info("Pas de changement de prix.")
+                pass # Pas de changement de prix
             time.sleep(5)
         
         if driver:

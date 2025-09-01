@@ -164,7 +164,7 @@ def main():
             continue # On passe au fichier suivant
 
         # Si le fichier ne contient pas "delete", on continue avec la logique d'ajout/mise à jour
-        urls = [line.strip() for line in contenu.splitlines() if line.strip()]
+        urls = [line.strip(' :\t\n\r') for line in f if line.strip()]
 
         # Vérifier si le set existe déjà
         ligne_existante_index = df_config.index[df_config['ID_Set'] == set_id].tolist()
