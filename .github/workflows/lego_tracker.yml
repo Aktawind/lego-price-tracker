@@ -50,6 +50,10 @@ jobs:
             echo "No new set configuration to commit."
           fi
 
+      # Lancer le scraper d'Avenue de la Brique
+      - name: Scrape Avenue de la Brique
+        run: python avenue_scraper.py
+
       # Lancer le script Python
       - name: Run Lego Price Tracker
         id: run_script
