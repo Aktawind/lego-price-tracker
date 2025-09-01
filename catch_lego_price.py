@@ -246,7 +246,23 @@ def verifier_les_prix():
                 lignes_a_ajouter.append(nouvelle_ligne)
                 
                 if prix_precedent is not None and prix_actuel < prix_precedent:
-                    logging.info("BAISSE DE PRIX ! Ajout à la liste de notification.")
+                    logging.info("Baisse de prix détectée. Vérification si c'est un nouveau record...")
+                    
+                    # === DÉBUT DE LA NOUVELLE LOGIQUE D'ALERTE ===
+                    
+                    # 1. On récupère TOUT l'historique pour ce set, tous sites confondus
+                    df_set_history = df_historique[df_historique['ID_Set'] == tache['id_set']]
+                    
+                    # 2. On trouve le prix le plus bas jamais enregistré
+                    if not df_set_history.empty:
+                        prix_record_precedent = df_set_history['Prix'].min()
+                    else:
+                        # S'il n'y a pas d'historique, toute baisse est un record
+                        prix_record_precedent = float('inf') 
+                    
+                    # 3. On ne notifie que si le nouveau prix bat le record
+                    if prix_actuel < prix_record_precedent:
+                        logging.info(f"NOUVEAU PRIX RECORD ! Ancien record: {prix_record_precedent}€. Ajout à la liste de notification.")
                     
                     analyse_affaire = "standard"
                     image_url = ''
@@ -270,10 +286,11 @@ def verifier_les_prix():
                     baisses_de_prix_a_notifier.append({
                         'nom_set': nom_set, 'nouveau_prix': prix_actuel,
                         'prix_precedent': prix_precedent, 'site': site, 'url': url_offre,
-                        'image_url': image_url, 'analyse_affaire': analyse_affaire
+                        'image_url': image_url, 'analyse_affaire': analyse_affaire,
+                        'est_un_record': True # On ajoute une information pour l'email
                     })
             else:
-                logging.info("Pas de changement de prix.")
+                logging.info(f"Baisse de prix, mais pas un nouveau record (record actuel : {prix_record_precedent}€). Pas de notification.")
             time.sleep(5)
 
             # On marque cette tâche comme "faite" pour ne pas la re-scraper
