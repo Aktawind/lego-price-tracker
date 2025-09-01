@@ -248,21 +248,11 @@ def verifier_les_prix():
                 if prix_precedent is not None and prix_actuel < prix_precedent:
                     logging.info("Baisse de prix détectée. Vérification si c'est un nouveau record...")
                     
-                    # === DÉBUT DE LA NOUVELLE LOGIQUE D'ALERTE ===
+                    df_set_history = df_historique[df_historique['ID_Set'] == set_id] # On utilise 'set_id'
+                    prix_record_precedent = df_set_history['Prix'].min() if not df_set_history.empty else float('inf')
                     
-                    # 1. On récupère TOUT l'historique pour ce set, tous sites confondus
-                    df_set_history = df_historique[df_historique['ID_Set'] == tache['id_set']]
-                    
-                    # 2. On trouve le prix le plus bas jamais enregistré
-                    if not df_set_history.empty:
-                        prix_record_precedent = df_set_history['Prix'].min()
-                    else:
-                        # S'il n'y a pas d'historique, toute baisse est un record
-                        prix_record_precedent = float('inf') 
-                    
-                    # 3. On ne notifie que si le nouveau prix bat le record
                     if prix_actuel < prix_record_precedent:
-                        logging.info(f"NOUVEAU PRIX RECORD ! Ancien record: {prix_record_precedent}€. Ajout à la liste de notification.")
+                        logging.info(f"🏆 NOUVEAU PRIX RECORD ! Ancien record: {prix_record_precedent}€. Ajout à la notification.")
                     
                     analyse_affaire = "standard"
                     image_url = ''
@@ -418,7 +408,13 @@ def verifier_les_prix():
                 lignes_a_ajouter.append(nouvelle_ligne)
                 
                 if prix_precedent is not None and prix_actuel < prix_precedent:
-                    logging.info("BAISSE DE PRIX ! Ajout à la liste de notification.")
+                    logging.info("Baisse de prix détectée. Vérification si c'est un nouveau record...")
+                    
+                    df_set_history = df_historique[df_historique['ID_Set'] == tache['id_set']] # On utilise 'tache['id_set']'
+                    prix_record_precedent = df_set_history['Prix'].min() if not df_set_history.empty else float('inf')
+                    
+                    if prix_actuel < prix_record_precedent:
+                        logging.info(f"🏆 NOUVEAU PRIX RECORD ! Ancien record: {prix_record_precedent}€. Ajout à la notification.")
                     
                     analyse_affaire = "standard"
                     image_url = ''
