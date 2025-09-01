@@ -279,22 +279,36 @@ def verifier_les_prix():
                             driver.get("https://www.amazon.fr/")
                             wait = WebDriverWait(driver, 10)
                             
-                            # On gère d'abord les cookies sur la page d'accueil
+                            # === DÉBUT DE LA MODIFICATION ===
+
+                            # 1. On gère les cookies sur la page d'accueil AVANT tout le reste
                             try:
                                 bouton_cookies = wait.until(EC.element_to_be_clickable((By.ID, "sp-cc-accept")))
                                 bouton_cookies.click()
+                                logging.info("  -> Bannière de cookies sur la page d'accueil gérée.")
+                                time.sleep(1) # Petite pause pour laisser la bannière disparaître
                             except Exception:
                                 logging.info("  -> Pas de bannière de cookies sur la page d'accueil.")
 
-                            # Ensuite, on force la localisation
-                            bouton_localisation = wait.until(EC.element_to_be_clickable((By.ID, "nav-global-location-popover-link")))
+                            # 2. On utilise un sélecteur plus robuste pour le bouton de localisation
+                            #    On cherche un lien ou un div qui a un ID contenant "location"
+                            xpath_localisation = "//*[@id='nav-global-location-popover-link' or @id='glow-ingress-block']"
+                            bouton_localisation = wait.until(
+                                EC.element_to_be_clickable((By.XPATH, xpath_localisation))
+                            )
                             bouton_localisation.click()
+                            
+                            # 3. Le reste est inchangé car vos nouveaux extraits HTML le confirment
                             champ_postal = wait.until(EC.visibility_of_element_located((By.ID, "GLUXZipUpdateInput")))
+                            champ_postal.clear() # On vide le champ au cas où il serait pré-rempli
                             champ_postal.send_keys("38540")
-                            bouton_actualiser = driver.find_element(By.CSS_SELECTOR, '[data-action="GLUXPostalUpdateAction"] input')
-                            bouton_actualiser.click()
-                            wait.until(EC.staleness_of(bouton_actualiser))
-                            logging.info("Localisation française pour Amazon forcée avec succès.")
+                            
+                            bouton_actualiser_container = wait.until(EC.element_to_be_clickable((By.ID, "GLUXZipUpdate")))
+                            bouton_actualiser_container.click()
+                            
+                            # 4. On attend que la page se recharge en vérifiant que le code postal est bien mis à jour
+                            wait.until(EC.text_to_be_present_in_element((By.ID, "glow-ingress-line2"), "38540"))
+                            logging.info("Localisation française pour Amazon forcée avec succès.")  
                             
                         except Exception as e:
                             # Si la localisation échoue, c'est une erreur critique pour Amazon
