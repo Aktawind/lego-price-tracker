@@ -25,14 +25,14 @@ SEUIL_BONNE_AFFAIRE = 0.80      # Entre 20% et 29% de réduction (prix <= 80% du
 
 # Liste des vendeurs à récupérer sur le site Avenue de la Brique
 MAP_VENDEURS = {
-    "amazon": "Amazon",
-    "cdiscount": "Cdiscount", # Assurez-vous que le mot-clé est bien "cdiscount"
-    "fnac": "Fnac",
-    "e.leclerc": "Leclerc",
-    "auchan": "Auchan",
-    "carrefour": "Carrefour",
-    "la grande récré": "La Grande Récré",
-    "ltoys": "Ltoys",
-    "lego": "Lego"
-    # N'ajoutez que les vendeurs que vous voulez suivre !
+    "chez amazon": "Amazon",
+    "chez cdiscount": "Cdiscount",
+    "chez fnac": "Fnac",
+    "chez e.leclerc": "Leclerc",
+    "chez auchan": "Auchan",
+    "chez carrefour": "Carrefour",
+    "chez la grande récré": "LaGrandeRecre",
+    "chez ltoys": "Ltoys",
+    "chez lego": "Lego",
+    "chez JouéClub": "JouéClub"
 }

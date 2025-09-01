@@ -252,7 +252,7 @@ def verifier_les_prix():
                     image_url = ''
                     try:
                         # Étape 3 : Utiliser le même df_config pour l'analyse
-                        config_set_row = df_config.loc[df_config['ID_Set'] == tache['id_set']].iloc[0]
+                        config_set_row = df_config.loc[df_config['ID_Set'] == set_id].iloc[0]
                         nb_pieces = pd.to_numeric(config_set_row.get('nbPieces'), errors='coerce')
                         collection = config_set_row.get('Collection', 'default')
                         image_url = config_set_row.get('Image_URL', '')
@@ -265,11 +265,11 @@ def verifier_les_prix():
                             elif prix_actuel <= prix_juste * SEUIL_BONNE_AFFAIRE:
                                 analyse_affaire = "bonne"
                     except IndexError:
-                        logging.warning(f"Infos de config manquantes pour le set {tache['id_set']} pour l'analyse.")
+                        logging.warning(f"Infos de config manquantes pour le set {set_id} pour l'analyse de 'bonne affaire'.")
 
                     baisses_de_prix_a_notifier.append({
-                        'nom_set': tache['nom_set'], 'nouveau_prix': prix_actuel,
-                        'prix_precedent': prix_precedent, 'site': site, 'url': tache['url'],
+                        'nom_set': nom_set, 'nouveau_prix': prix_actuel,
+                        'prix_precedent': prix_precedent, 'site': site, 'url': url_offre,
                         'image_url': image_url, 'analyse_affaire': analyse_affaire
                     })
             else:

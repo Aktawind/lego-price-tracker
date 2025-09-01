@@ -64,23 +64,26 @@ def scrape_set_on_avenue(driver, set_id):
             
             alt_text = logo_img['alt'].lower()
             
-            vendeur_trouve = False
+            vendeur_assigne = None
             for vendeur_keyword, nom_site in MAP_VENDEURS.items():
+                # On cherche une correspondance exacte de "chez [nom du vendeur]"
                 if vendeur_keyword in alt_text:
-                    # On a trouvé un vendeur de notre liste blanche
-                    url_relative = lien_tag['href']
-                    url_absolue = f"{URL_BASE_AVENUE}{url_relative.lstrip('/')}"
-                    
-                    offres_trouvees.append({
-                        "site": nom_site, # On utilise le nom propre défini dans notre map
-                        "url": url_absolue,
-                        "prix": float(prix_brut)
-                    })
-                    vendeur_trouve = True
-                    break # On a trouvé le vendeur, on passe à l'offre suivante
+                    vendeur_assigne = nom_site
+                    break # On a trouvé le vendeur, on arrête de chercher
             
-            if not vendeur_trouve:
-                logging.info(f"  -> Vendeur non suivi ignoré (trouvé dans 'alt': {alt_text})")
+            if vendeur_assigne:
+                # Si on a trouvé un vendeur de notre liste, on enregistre l'offre
+                url_relative = lien_tag['href']
+                url_absolue = f"{URL_BASE_AVENUE}{url_relative.lstrip('/')}"
+                
+                offres_trouvees.append({
+                    "site": vendeur_assigne,
+                    "url": url_absolue,
+                    "prix": float(prix_brut)
+                })
+                logging.info(f"  -> Offre trouvée et assignée à : {vendeur_assigne}")
+            else:
+                logging.info(f"  -> Vendeur non suivi ignoré (alt: '{logo_img['alt']}')")
 
         return offres_trouvees
     except Exception as e:
@@ -109,6 +112,22 @@ def main():
         if offres:
             deals_par_set[set_id] = offres
         time.sleep(3) # Pause de politesse entre chaque recherche de set
+
+    deals_finaux = {}
+    logging.info("Nettoyage des offres pour ne garder que la meilleure par site...")
+    for set_id, offres in deals_par_set.items():
+        meilleures_offres_par_site = {}
+        for offre in offres:
+            site = offre['site']
+            prix = offre['prix']
+            
+            # Si on n'a pas encore vu ce site, ou si ce prix est meilleur, on le garde
+            if site not in meilleures_offres_par_site or prix < meilleures_offres_par_site[site]['prix']:
+                meilleures_offres_par_site[site] = offre
+        
+        # On convertit le dictionnaire de meilleures offres en une simple liste
+        if meilleures_offres_par_site:
+            deals_finaux[set_id] = list(meilleures_offres_par_site.values())
     
     driver.quit() # On ferme le navigateur à la fin
     
