@@ -119,9 +119,9 @@ def envoyer_email_recapitulatif(baisses_de_prix):
     for deal in baisses_de_prix:
         message_affaire = ""
         if deal.get('analyse_affaire') == "tres_bonne":
-            message_affaire = "\n   >> C'est une TRÈS bonne affaire ! ??????"
+            message_affaire = "\n   >> C'est une TRÈS bonne affaire 🔥🔥"
         elif deal.get('analyse_affaire') == "bonne":
-            message_affaire = "\n   >> C'est une bonne affaire ! ??"
+            message_affaire = "\n   >> C'est une bonne affaire ✅✅"
 
         text_body += (
             f"--------------------\n"
@@ -206,7 +206,7 @@ def verifier_les_prix():
     try:
         df_historique = pd.read_excel(FICHIER_EXCEL, dtype={'ID_Set': str})
     except FileNotFoundError:
-        df_historique = pd.DataFrame(columns=['Date', 'ID_Set', 'Nom_Set', 'Site', 'Prix'])
+        df_historique = pd.DataFrame(columns=['Date', 'ID_Set', 'Nom_Set', 'Site', 'Prix', 'URL'])
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
@@ -242,7 +242,7 @@ def verifier_les_prix():
             
             if prix_precedent is None or abs(prix_actuel - prix_precedent) > 0.01:
                 logging.info(f"Changement de prix détecté (précédent : {prix_precedent}€).")
-                nouvelle_ligne = {'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'ID_Set': set_id, 'Nom_Set': nom_set, 'Site': site, 'Prix': prix_actuel}
+                nouvelle_ligne = {'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'ID_Set': set_id, 'Nom_Set': nom_set, 'Site': site, 'Prix': prix_actuel, 'URL': url_offre}
                 lignes_a_ajouter.append(nouvelle_ligne)
                 
                 if prix_precedent is not None and prix_actuel < prix_precedent:
@@ -397,7 +397,7 @@ def verifier_les_prix():
             
             if prix_precedent is None or abs(prix_actuel - prix_precedent) > 0.01:
                 logging.info(f"Changement de prix détecté (précédent : {prix_precedent}€). Enregistrement...")
-                nouvelle_ligne = {'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'ID_Set': tache['id_set'], 'Nom_Set': tache['nom_set'], 'Site': site, 'Prix': prix_actuel}
+                nouvelle_ligne = {'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'ID_Set': tache['id_set'], 'Nom_Set': tache['nom_set'], 'Site': site, 'Prix': prix_actuel, 'URL': url_propre}
                 lignes_a_ajouter.append(nouvelle_ligne)
                 
                 if prix_precedent is not None and prix_actuel < prix_precedent:
