@@ -128,9 +128,9 @@ def process_set_file(file_path):
     return nouvelle_ligne
 
 def main():
-    set_files = [f for f in os.listdir() if os.path.splitext(os.path.basename(f))[0].isdigit()]
+    fichiers_a_traiter = [f for f in os.listdir() if os.path.splitext(os.path.basename(f))[0].isdigit()]
 
-    if not set_files:
+    if not fichiers_a_traiter:
         logging.info("Aucun nouveau fichier de set à traiter.")
         return
 
@@ -138,24 +138,49 @@ def main():
     if os.path.exists(FICHIER_CONFIG_EXCEL):
         df_config = pd.read_excel(FICHIER_CONFIG_EXCEL, dtype=str)
     else:
-        logging.info(f"Fichier '{FICHIER_CONFIG_EXCEL}' non trouvé. Un nouveau sera créé.")
-        colonnes = ["ID_Set", "Nom_Set", "nbPieces", "Collection", "Image_URL"] + list(DOMAIN_TO_COLUMN_MAP.values())
-        df_config = pd.DataFrame(columns=list(dict.fromkeys(colonnes)))
+        # Si le fichier n'existe pas, on ne peut rien supprimer ou mettre à jour
+        df_config = pd.DataFrame(columns=["ID_Set"])
 
     config_changed = False
+    fichiers_a_supprimer_apres_traitement = []
 
-    for file_path in set_files:
+    for file_path in fichiers_a_traiter:
         set_id = os.path.splitext(os.path.basename(file_path))[0]
-        logging.info(f"--- Traitement du fichier pour le set ID: {set_id} ---")
 
         with open(file_path, 'r', encoding='utf-8') as f:
-            urls = [line.strip() for line in f if line.strip()]
+            contenu = f.read().strip().lower()
+
+        if contenu == 'delete':
+            logging.info(f"--- Fichier de suppression détecté pour le set ID: {set_id} ---")
+            if set_id in df_config['ID_Set'].values:
+                # On supprime la ligne correspondante
+                df_config = df_config[df_config['ID_Set'] != set_id]
+                logging.info(f"Set {set_id} supprimé de la configuration.")
+                config_changed = True
+
+                # On nettoie l'historique des prix si nécessaire
+                try:
+                    df_historique = pd.read_excel("prix_lego.xlsx", dtype=str)
+                    df_historique_nettoye = df_historique[df_historique['ID_Set'] != set_id]
+                    df_historique_nettoye.to_excel("prix_lego.xlsx", index=False)
+                    logging.info(f"Historique des prix pour le set {set_id} nettoyé.")
+                except FileNotFoundError:
+                    logging.info("Fichier d'historique non trouvé, pas de nettoyage nécessaire.")
+                except Exception as e:
+                    logging.error(f"Erreur lors du nettoyage de l'historique : {e}")
+            else:
+                logging.warning(f"Le set {set_id} à supprimer n'a pas été trouvé dans la configuration.")
+            
+            fichiers_a_supprimer_apres_traitement.append(file_path)
+            continue # On passe au fichier suivant
+
+        # Si le fichier ne contient pas "delete", on continue avec la logique d'ajout/mise à jour
+        urls = [line.strip(' :\t\n\r') for line in f if line.strip()]
 
         # Vérifier si le set existe déjà
         ligne_existante_index = df_config.index[df_config['ID_Set'] == set_id].tolist()
 
         if ligne_existante_index:
-            # --- LOGIQUE DE MISE À JOUR (FUSION) ---
             logging.info(f"Le set {set_id} existe déjà. Fusion des nouvelles URL...")
             index_a_modifier = ligne_existante_index[0]
             
@@ -171,7 +196,6 @@ def main():
                 if not url_assignee:
                     logging.warning(f"Domaine non reconnu pour l'URL : {url}")
         else:
-            # --- LOGIQUE DE CRÉATION (INCHANGÉE) ---
             logging.info(f"Nouveau set {set_id}. Récupération des métadonnées...")
             metadata = get_lego_metadata(set_id)
             if not metadata:
@@ -199,14 +223,18 @@ def main():
             df_config = pd.concat([df_config, nouvelle_ligne_df], ignore_index=True)
         
         config_changed = True
-        os.remove(file_path)
-        logging.info(f"Fichier '{file_path}' traité et supprimé.")
+        fichiers_a_supprimer_apres_traitement.append(file_path)
 
     if config_changed:
         df_config.to_excel(FICHIER_CONFIG_EXCEL, index=False)
         logging.info(f"Fichier '{FICHIER_CONFIG_EXCEL}' mis à jour.")
     else:
         logging.info("Aucun changement apporté à la configuration.")
+
+    # On supprime tous les fichiers traités à la fin
+    for file_path in fichiers_a_supprimer_apres_traitement:
+        os.remove(file_path)
+        logging.info(f"Fichier '{file_path}' traité et supprimé.")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
