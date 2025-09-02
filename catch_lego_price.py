@@ -13,6 +13,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium_stealth import stealth 
 
 import scrapers
 import email_manager
@@ -69,8 +70,13 @@ def regrouper_taches_par_site(df_config):
     return taches_par_site
 
 def creer_driver_selenium(scraper_type="standard"):
-    """Crée et retourne une instance configurée du driver Chrome."""
+    """
+    Crée et retourne une instance configurée du driver Chrome.
+    Applique le mode 'stealth' pour les types de scrapers spécifiés.
+    """
     logging.info(f"Création d'un driver Selenium (type: {scraper_type})")
+    
+    # Configuration "paranoïaque" pour un mimétisme humain maximal
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
@@ -82,8 +88,23 @@ def creer_driver_selenium(scraper_type="standard"):
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
     
+    # Création de l'instance du driver
     driver = webdriver.Chrome(options=options)
 
+    # --- Application conditionnelle du mode Stealth ---
+    # Mettez ici la liste de tous les types de scrapers qui nécessitent le camouflage
+    types_furtifs = ["fnac", "carrefour", "kingjouet"] # Ajoutez/retirez des types au besoin
+
+    if scraper_type in types_furtifs:
+        logging.info("  -> Activation du mode Stealth pour ce scraper.")
+        stealth(driver,
+                languages=["fr-FR", "fr"],
+                vendor="Google Inc.",
+                platform="Win32",
+                webgl_vendor="Intel Inc.",
+                renderer="Intel Iris OpenGL Engine",
+                fix_hairline=True)
+                
     return driver
 
 def obtenir_localisation_ip():

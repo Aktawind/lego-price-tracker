@@ -157,6 +157,17 @@ def main():
                 df_config = df_config[df_config['ID_Set'] != set_id]
                 logging.info(f"Set {set_id} supprimé de la configuration.")
                 config_changed = True
+
+                # On nettoie l'historique des prix si nécessaire
+                try:
+                    df_historique = pd.read_excel("prix_lego.xlsx", dtype=str)
+                    df_historique_nettoye = df_historique[df_historique['ID_Set'] != set_id]
+                    df_historique_nettoye.to_excel("prix_lego.xlsx", index=False)
+                    logging.info(f"Historique des prix pour le set {set_id} nettoyé.")
+                except FileNotFoundError:
+                    logging.info("Fichier d'historique non trouvé, pas de nettoyage nécessaire.")
+                except Exception as e:
+                    logging.error(f"Erreur lors du nettoyage de l'historique : {e}")
             else:
                 logging.warning(f"Le set {set_id} à supprimer n'a pas été trouvé dans la configuration.")
             
