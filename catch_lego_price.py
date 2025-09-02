@@ -1,9 +1,6 @@
 import pandas as pd
 from datetime import datetime
 import time
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 import urllib3
 import os
 import logging
@@ -16,15 +13,13 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium_stealth import stealth
 
-# On importe notre boîte à outils de scrapers
 import scrapers
+import email_manager
 
 # --- CONFIGURATION GLOBALE ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
 CONFIG_SITES = {
     "Amazon": { "type": "amazon", "use_selenium": True },
     "Lego": { "type": "standard", "selecteur": '[data-test="product-price"]', "use_selenium": False },
@@ -35,12 +30,15 @@ CONFIG_SITES = {
 }
 FICHIER_EXCEL = "prix_lego.xlsx"
 FICHIER_CONFIG_EXCEL = 'config_sets.xlsx'
-EMAIL_ADRESSE = os.getenv('GMAIL_ADDRESS')
-EMAIL_MOT_DE_PASSE = os.getenv('GMAIL_APP_PASSWORD')
-EMAIL_DESTINATAIRE = os.getenv('MAIL_DESTINATAIRE')
+
+# On regroupe la configuration email dans un dictionnaire
+EMAIL_CONFIG = {
+    "adresse": os.getenv('GMAIL_ADDRESS'),
+    "mot_de_passe": os.getenv('GMAIL_APP_PASSWORD'),
+    "destinataire": os.getenv('MAIL_DESTINATAIRE')
+}
 
 # --- FONCTIONS UTILITAIRES ---
-
 def charger_configuration_sets_df(fichier_config):
     """Lit simplement le fichier de configuration Excel et retourne un DataFrame."""
     try:
@@ -86,83 +84,7 @@ def creer_driver_selenium(scraper_type="standard"):
     
     driver = webdriver.Chrome(options=options)
 
-    if scraper_type == "fnac": # Si vous réactivez la Fnac
-        stealth(driver, languages=["fr-FR", "fr"], vendor="Google Inc.", platform="Win32", webgl_vendor="Intel Inc.", renderer="Intel Iris OpenGL Engine", fix_hairline=True)
-                
     return driver
-    
-# Fonction pour envoyer un email d'alerte
-def envoyer_email_recapitulatif(baisses_de_prix):
-    """
-    Prend une liste de baisses de prix et envoie un seul email de résumé
-    """
-    
-    nombre_baisses = len(baisses_de_prix)
-    sujet = f"Alerte Prix LEGO : {nombre_baisses} baisse(s) de prix détectée(s) !"
-    
-    # On crée un email 'alternative' pour avoir une version texte et une version HTML
-    msg = MIMEMultipart('alternative')
-    msg['Subject'] = sujet
-    msg['From'] = EMAIL_ADRESSE
-    msg['To'] = EMAIL_DESTINATAIRE
-
-    # On prépare les deux versions du corps de l'email
-    text_body = "Bonjour,\n\nVoici les baisses de prix détectées aujourd'hui :\n\n"
-    html_body = """
-    <html>
-      <head></head>
-      <body style="font-family: sans-serif;">
-        <h2>Bonjour,</h2>
-        <p>Voici les baisses de prix détectées aujourd'hui :</p>
-    """
-    
-    for deal in baisses_de_prix:
-        message_affaire = ""
-        if deal.get('analyse_affaire') == "tres_bonne":
-            message_affaire = "\n   >> C'est une TRÈS bonne affaire 🔥🔥"
-        elif deal.get('analyse_affaire') == "bonne":
-            message_affaire = "\n   >> C'est une bonne affaire ✅✅"
-
-        text_body += (
-            f"--------------------\n"
-            f"Set: {deal['nom_set']}\n"
-            f"Site: {deal['site']}\n"
-            f"Ancien Prix: {deal['prix_precedent']:.2f}€\n"
-            f"NOUVEAU PRIX: {deal['nouveau_prix']:.2f}€{message_affaire}\n"
-            f"Lien: {deal['url']}\n"
-        )
-      
-        html_body += f"""
-        <hr>
-        <div style="padding: 10px;">
-            <h3 style="margin-top:0;">{deal['nom_set']}</h3>
-            <p style="line-height: 1.5;">
-                <b>Site:</b> {deal['site']}<br>
-                <b>Ancien Prix:</b> {deal['prix_precedent']:.2f}€<br>
-                <b style="color:green; font-size: 1.1em;">NOUVEAU PRIX: {deal['nouveau_prix']:.2f}€</b>
-                {message_affaire}
-            </p>
-            <p><a href="{deal['url']}" style="background-color: #007bff; color: white; padding: 8px 12px; text-decoration: none; border-radius: 5px;">Voir l'offre</a></p>
-        </div>
-        """
-        
-    lien_wiki = "https://github.com/Aktawind/lego-price-tracker/wiki"
-    text_body += f"\n\nPour une analyse détaillée, consultez votre tableau de bord : {lien_wiki}"
-    html_body += f'<hr><p>Pour une analyse détaillée et l\'historique des prix, consultez votre <a href="{lien_wiki}">tableau de bord</a>.</p></body></html>'
-    
-    # On attache les deux versions (texte et HTML)
-    msg.attach(MIMEText(text_body, 'plain'))
-    msg.attach(MIMEText(html_body, 'html'))
-    
-    # La partie envoi reste la même
-    try:
-        with smtplib.SMTP('smtp.gmail.com', 587) as smtp_server:
-            smtp_server.starttls()
-            smtp_server.login(EMAIL_ADRESSE, EMAIL_MOT_DE_PASSE)
-            smtp_server.send_message(msg)
-        logging.info(f"Email récapitulatif de {nombre_baisses} baisse(s) envoyé !")
-    except Exception as e:
-        logging.error(f"Erreur lors de l'envoi de l'email récapitulatif : {e}")
 
 def obtenir_localisation_ip():
     """
@@ -196,28 +118,28 @@ def obtenir_localisation_ip():
         logging.error(f"Erreur inattendue lors de la récupération de la localisation de l'IP : {e}")
         return None
     
+# --- FONCTION PRINCIPALE ---
 def verifier_les_prix():
     logging.info("Lancement de la vérification des prix")
     
-    # Charger les configurations et l'historique
     df_config = charger_configuration_sets_df(FICHIER_CONFIG_EXCEL)
     if df_config is None: return
 
     try:
-        df_historique = pd.read_excel(FICHIER_EXCEL, dtype={'ID_Set': str})
+        df_historique_precedent = pd.read_excel(FICHIER_EXCEL, dtype={'ID_Set': str})
     except FileNotFoundError:
-        df_historique = pd.DataFrame(columns=['Date', 'ID_Set', 'Nom_Set', 'Site', 'Prix', 'URL'])
+        df_historique_precedent = pd.DataFrame(columns=['Date', 'ID_Set', 'Nom_Set', 'Site', 'Prix', 'URL'])
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
         'Accept-Language': 'fr-FR,fr;q=0.9'
     }
-    
+        
+    # --- ÉTAPE 1 : COLLECTE ---
     lignes_a_ajouter = []
-    baisses_de_prix_a_notifier = []
-    taches_traitees = set() # "Blacklist" des tâches déjà traitées
+    taches_traitees = set() # Pour le dédoublonnage
 
-    # === ÉTAPE 1 : TRAITER LES DEALS D'AVENUE DE LA BRIQUE EN PRIORITÉ ===
+    # --- Phase 1a : Traitement Automatique via Avenue de la Brique ---
     logging.info("--- Début du traitement des deals d'Avenue de la Brique ---")
     try:
         with open('deals_du_jour.json', 'r', encoding='utf-8') as f:
@@ -227,7 +149,9 @@ def verifier_les_prix():
 
     for set_id, offres in deals_avenue.items():
         config_set_row_df = df_config.loc[df_config['ID_Set'] == set_id]
-        if config_set_row_df.empty: continue
+        if config_set_row_df.empty:
+            logging.warning(f"Set {set_id} trouvé sur Avenue mais non présent dans la config. Ignoré.")
+            continue
         nom_set = config_set_row_df.iloc[0]['Nom_Set']
 
         for offre in offres:
@@ -235,71 +159,38 @@ def verifier_les_prix():
             prix_actuel = offre['prix']
             url_offre = offre['url']
             
-            logging.info(f"Traitement de '{nom_set}' sur {site} (via Avenue)... Prix actuel : {prix_actuel}€")
+            # On ajoute le prix trouvé à notre collecte du jour
+            nouvelle_ligne = {
+                'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'ID_Set': set_id,
+                'Nom_Set': nom_set,
+                'Site': site,
+                'Prix': prix_actuel,
+                'URL': url_offre
+            }
+            lignes_a_ajouter.append(nouvelle_ligne)
             
-            df_filtre = df_historique[(df_historique['ID_Set'] == set_id) & (df_historique['Site'] == site)]
-            prix_precedent = df_filtre['Prix'].iloc[-1] if not df_filtre.empty else None
-            
-            if prix_precedent is None or abs(prix_actuel - prix_precedent) > 0.01:
-                logging.info(f"Changement de prix détecté (précédent : {prix_precedent}€).")
-                nouvelle_ligne = {'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'ID_Set': set_id, 'Nom_Set': nom_set, 'Site': site, 'Prix': prix_actuel, 'URL': url_offre}
-                lignes_a_ajouter.append(nouvelle_ligne)
-                
-                if prix_precedent is not None and prix_actuel < prix_precedent:
-                    logging.info("Baisse de prix détectée. Vérification si c'est un nouveau record...")
-                    
-                    df_set_history = df_historique[df_historique['ID_Set'] == set_id] # On utilise 'set_id'
-                    prix_record_precedent = df_set_history['Prix'].min() if not df_set_history.empty else float('inf')
-                    
-                    if prix_actuel < prix_record_precedent:
-                        logging.info(f"🏆 NOUVEAU PRIX RECORD ! Ancien record: {prix_record_precedent}€. Ajout à la notification.")
-                    
-                    analyse_affaire = "standard"
-                    image_url = ''
-                    try:
-                        # Étape 3 : Utiliser le même df_config pour l'analyse
-                        config_set_row = df_config.loc[df_config['ID_Set'] == set_id].iloc[0]
-                        nb_pieces = pd.to_numeric(config_set_row.get('nbPieces'), errors='coerce')
-                        collection = config_set_row.get('Collection', 'default')
-                        image_url = config_set_row.get('Image_URL', '')
-                        
-                        if pd.notna(nb_pieces):
-                            prix_moyen = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLLECTION['default'])
-                            prix_juste = nb_pieces * prix_moyen
-                            if prix_actuel <= prix_juste * SEUIL_TRES_BONNE_AFFAIRE:
-                                analyse_affaire = "tres_bonne"
-                            elif prix_actuel <= prix_juste * SEUIL_BONNE_AFFAIRE:
-                                analyse_affaire = "bonne"
-                    except IndexError:
-                        logging.warning(f"Infos de config manquantes pour le set {set_id} pour l'analyse de 'bonne affaire'.")
-
-                    baisses_de_prix_a_notifier.append({
-                        'nom_set': nom_set, 'nouveau_prix': prix_actuel,
-                        'prix_precedent': prix_precedent, 'site': site, 'url': url_offre,
-                        'image_url': image_url, 'analyse_affaire': analyse_affaire,
-                        'est_un_record': True # On ajoute une information pour l'email
-                    })
-            else:
-                logging.info(f"Baisse de prix, mais pas un nouveau record (record actuel : {prix_record_precedent}€). Pas de notification.")
-            time.sleep(5)
-
-            # On marque cette tâche comme "faite" pour ne pas la re-scraper
+            # On marque cette tâche comme "faite" pour ne pas la rescraper manuellement
             taches_traitees.add((set_id, site))
 
-    # === ÉTAPE 2 : TRAITER LES TÂCHES MANUELLES RESTANTES ===
+    # --- Phase 1b : Traitement Manuel pour les URL de la configuration ---
     taches_manuelles = regrouper_taches_par_site(df_config)
-    SCRAPERS = { "amazon": scrapers.scrape_amazon, "carrefour": scrapers.scrape_carrefour, "standard": scrapers.scrape_standard }
+    
+    SCRAPERS = {
+        "amazon": scrapers.scrape_amazon,
+        "carrefour": scrapers.scrape_carrefour,
+        "standard": scrapers.scrape_standard
+    }
 
     for site, taches in taches_manuelles.items():
-        logging.info(f"--- Début du traitement manuel pour : {site} ---")
-        
-        # On filtre les tâches pour ne garder que celles qui n'ont pas été traitées
+        # On filtre pour ne pas refaire le travail déjà fait par Avenue
         taches_a_faire = [t for t in taches if (t['id_set'], site) not in taches_traitees]
         
         if not taches_a_faire:
-            logging.info(f"Toutes les tâches pour {site} ont déjà été traitées via Avenue de la Brique. On ignore.")
+            logging.info(f"--- Traitement manuel pour {site} ignoré (toutes les tâches ont été traitées via Avenue) ---")
             continue
 
+        logging.info(f"--- Début du traitement manuel pour : {site} ---")
         site_config = CONFIG_SITES.get(site)
         if not site_config: continue
         
@@ -358,31 +249,21 @@ def verifier_les_prix():
                             
                     else:
                         logging.info("IP française (ou non détectée), pas de forçage nécessaire pour Amazon.")
-                
+
             except Exception as e:
                 logging.error(f"Impossible de démarrer/préparer Selenium pour {site}: {e}")
                 if driver: driver.quit()
                 continue
 
-        # Boucle secondaire : on traite chaque produit
         for tache in taches_a_faire:
             logging.info(f"Vérification de '{tache['nom_set']}'...")
-            prix_actuel = None
-
-             # On récupère l'URL brute et on la nettoie systématiquement
-            url_brute = tache['url']
-            url_propre = url_brute.strip().rstrip(':/')
             
-            # On vérifie si l'URL a été modifiée pour le log
-            if url_brute != url_propre:
-                logging.info(f"  -> URL nettoyée : de '{url_brute}' à '{url_propre}'")
+            url_propre = tache['url'].strip().rstrip(':/')
             
             try:
-                kwargs = {'url': tache['url']}
-                if driver:
-                    kwargs['driver'] = driver
-                else:
-                    kwargs['headers'] = headers
+                kwargs = {'url': url_propre}
+                if driver: kwargs['driver'] = driver
+                else: kwargs['headers'] = headers
                 
                 if 'selecteur' in tache and tache['selecteur']:
                     if isinstance(tache['selecteur'], dict):
@@ -392,74 +273,117 @@ def verifier_les_prix():
                 
                 prix_actuel = scraper_function(**kwargs)
             except Exception as e:
-                logging.error(f"Erreur inattendue lors de l'appel du scraper pour {tache['url']}: {e}")
+                logging.error(f"Erreur inattendue lors de l'appel du scraper pour {url_propre}: {e}")
+                prix_actuel = None # S'assurer que le prix est None en cas d'erreur
 
-            if prix_actuel is None:
-                logging.warning("Prix non trouvé.")
-                continue
-            
-            logging.info(f"Prix actuel : {prix_actuel}€")
-            df_filtre = df_historique[(df_historique['ID_Set'] == tache['id_set']) & (df_historique['Site'] == site)]
-            prix_precedent = df_filtre['Prix'].iloc[-1] if not df_filtre.empty else None
-            
-            if prix_precedent is None or abs(prix_actuel - prix_precedent) > 0.01:
-                logging.info(f"Changement de prix détecté (précédent : {prix_precedent}€). Enregistrement...")
-                nouvelle_ligne = {'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'ID_Set': tache['id_set'], 'Nom_Set': tache['nom_set'], 'Site': site, 'Prix': prix_actuel, 'URL': url_propre}
+            if prix_actuel is not None:
+                nouvelle_ligne = {
+                    'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'ID_Set': tache['id_set'],
+                    'Nom_Set': tache['nom_set'],
+                    'Site': site,
+                    'Prix': prix_actuel,
+                    'URL': url_propre
+                }
                 lignes_a_ajouter.append(nouvelle_ligne)
-                
-                if prix_precedent is not None and prix_actuel < prix_precedent:
-                    logging.info("Baisse de prix détectée. Vérification si c'est un nouveau record...")
-                    
-                    df_set_history = df_historique[df_historique['ID_Set'] == tache['id_set']] # On utilise 'tache['id_set']'
-                    prix_record_precedent = df_set_history['Prix'].min() if not df_set_history.empty else float('inf')
-                    
-                    if prix_actuel < prix_record_precedent:
-                        logging.info(f"🏆 NOUVEAU PRIX RECORD ! Ancien record: {prix_record_precedent}€. Ajout à la notification.")
-                    
-                    analyse_affaire = "standard"
-                    image_url = ''
-                    try:
-                        # Étape 3 : Utiliser le même df_config pour l'analyse
-                        config_set_row = df_config.loc[df_config['ID_Set'] == tache['id_set']].iloc[0]
-                        nb_pieces = pd.to_numeric(config_set_row.get('nbPieces'), errors='coerce')
-                        collection = config_set_row.get('Collection', 'default')
-                        image_url = config_set_row.get('Image_URL', '')
-                        
-                        if pd.notna(nb_pieces):
-                            prix_moyen = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLLECTION['default'])
-                            prix_juste = nb_pieces * prix_moyen
-                            if prix_actuel <= prix_juste * SEUIL_TRES_BONNE_AFFAIRE:
-                                analyse_affaire = "tres_bonne"
-                            elif prix_actuel <= prix_juste * SEUIL_BONNE_AFFAIRE:
-                                analyse_affaire = "bonne"
-                    except IndexError:
-                        logging.warning(f"Infos de config manquantes pour le set {tache['id_set']} pour l'analyse.")
-
-                    baisses_de_prix_a_notifier.append({
-                        'nom_set': tache['nom_set'], 'nouveau_prix': prix_actuel,
-                        'prix_precedent': prix_precedent, 'site': site, 'url': url_propre,
-                        'image_url': image_url, 'analyse_affaire': analyse_affaire
-                    })
             else:
-                logging.info("Pas de changement de prix.")
+                logging.warning("Prix non trouvé pour cette tâche.")
+            
             time.sleep(5)
         
         if driver:
             logging.info(f"Fermeture de la session Selenium pour {site}")
             driver.quit()
 
-    # === ÉTAPE 3 : NOTIFICATION ET SAUVEGARDE FINALES ===
+    # --- ÉTAPE 2 : ANALYSE ---
+    # === PHASE 2 : ANALYSE GLOBALE ET DÉCISION DE NOTIFICATION ===
+
+    if not lignes_a_ajouter:
+        logging.info("Aucun prix n'a pu être récupéré aujourd'hui. Fin du script.")
+        return
+
+    # On crée un DataFrame avec tous les prix trouvés aujourd'hui
+    df_aujourdhui = pd.DataFrame(lignes_a_ajouter)
+    
+    # On identifie les sets pour lesquels on a des données aujourd'hui
+    sets_scannes_ids = df_aujourdhui['ID_Set'].unique()
+    
+    baisses_de_prix_a_notifier = []
+    
+    logging.info("Analyse des changements pour les alertes de meilleur prix du marché...")
+    for set_id in sets_scannes_ids:
+        
+        # --- Comparaison J-1 vs J-0 ---
+        
+        # 1. On récupère les données de ce set pour AUJOURD'HUI
+        prix_set_aujourdhui = df_aujourdhui[df_aujourdhui['ID_Set'] == set_id]
+        meilleur_prix_aujourdhui = prix_set_aujourdhui['Prix'].min()
+        meilleure_offre_aujourdhui = prix_set_aujourdhui.loc[prix_set_aujourdhui['Prix'].idxmin()]
+        
+        # 2. On récupère l'historique de ce set AVANT aujourd'hui
+        df_set_historique_precedent = df_historique_precedent[df_historique_precedent['ID_Set'] == set_id]
+        
+        if df_set_historique_precedent.empty:
+            logging.info(f"Nouveau set {set_id} ou premier prix enregistré. Pas de comparaison possible pour une alerte.")
+            continue # C'est la première fois qu'on voit ce set, on ne peut pas comparer.
+
+        # 3. On trouve le dernier meilleur prix connu sur le marché
+        #    On prend les derniers prix enregistrés pour chaque site, puis le minimum parmi ceux-là.
+        meilleur_prix_precedent = df_set_historique_precedent.sort_values('Date').groupby('Site')['Prix'].last().min()
+        
+        # === LA CONDITION D'ALERTE FINALE ===
+        if meilleur_prix_aujourdhui < meilleur_prix_precedent:
+            logging.info(f"🏆 Baisse du meilleur prix marché pour le set {set_id} ! Nouveau meilleur prix: {meilleur_prix_aujourdhui}€ (précédent: {meilleur_prix_precedent}€)")
+            
+            # On prépare les données pour l'email
+            nom_set = meilleure_offre_aujourdhui['Nom_Set']
+            site_offre = meilleure_offre_aujourdhui['Site']
+            url_offre = meilleure_offre_aujourdhui.get('URL', '#')
+            
+            # On exécute l'analyse "bonne affaire"
+            analyse_affaire = "standard"
+            image_url = ''
+            try:
+                config_set_row = df_config.loc[df_config['ID_Set'] == set_id].iloc[0]
+                nb_pieces = pd.to_numeric(config_set_row.get('nbPieces'), errors='coerce')
+                collection = config_set_row.get('Collection', 'default')
+                image_url = config_set_row.get('Image_URL', '')
+                
+                if pd.notna(nb_pieces):
+                    prix_moyen = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLLECTION['default'])
+                    prix_juste = nb_pieces * prix_moyen
+                    if meilleur_prix_aujourdhui <= prix_juste * SEUIL_TRES_BONNE_AFFAIRE:
+                        analyse_affaire = "tres_bonne"
+                    elif meilleur_prix_aujourdhui <= prix_juste * SEUIL_BONNE_AFFAIRE:
+                        analyse_affaire = "bonne"
+            except IndexError:
+                logging.warning(f"Infos de config manquantes pour le set {set_id} pour l'analyse.")
+
+            baisses_de_prix_a_notifier.append({
+                'nom_set': nom_set,
+                'nouveau_prix': meilleur_prix_aujourdhui,
+                'prix_precedent': meilleur_prix_precedent,
+                'site': site_offre,
+                'url': url_offre,
+                'image_url': image_url,
+                'analyse_affaire': analyse_affaire,
+                'est_un_record': True # On peut utiliser cette clé pour un message spécial
+            })
+        else:
+            logging.info(f"Meilleur prix pour le set {set_id} n'a pas baissé (Actuel: {meilleur_prix_aujourdhui}€ vs Précédent: {meilleur_prix_precedent}€).")
+
+    # --- ÉTAPE 3 : NOTIFICATION ET SAUVEGARDE ---
     if baisses_de_prix_a_notifier:
-        envoyer_email_recapitulatif(baisses_de_prix_a_notifier)
-    if lignes_a_ajouter:
-        df_a_ajouter = pd.DataFrame(lignes_a_ajouter)
-        df_historique = pd.concat([df_historique, df_a_ajouter], ignore_index=True)
-        df_historique.to_excel(FICHIER_EXCEL, index=False)
-        logging.info(f"{len(lignes_a_ajouter)} modifications enregistrées dans le fichier Excel.")
+        email_manager.envoyer_email_recapitulatif(baisses_de_prix_a_notifier, EMAIL_CONFIG)
+        
+    # On sauvegarde l'historique complet, qui inclut les nouveaux prix du jour
+    df_historique_final = pd.concat([df_historique_precedent, df_aujourdhui], ignore_index=True)
+    df_historique_final.to_excel(FICHIER_EXCEL, index=False)
+    logging.info(f"{len(lignes_a_ajouter)} prix enregistrés/mis à jour dans le fichier Excel.")
 
 # --- POINT D'ENTRÉE ---
 if __name__ == "__main__":
-    if not all([EMAIL_ADRESSE, EMAIL_MOT_DE_PASSE, EMAIL_DESTINATAIRE]):
+    if not all(EMAIL_CONFIG.values()):
         logging.error("Variables d'environnement pour l'email non configurées. Arrêt.")
     else:
         verifier_les_prix()
