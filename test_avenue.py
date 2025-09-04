@@ -5,12 +5,12 @@ import re
 
 # --- CONFIGURATION DU TEST ---
 # L'URL de la page produit sur Avenue de la Brique
-URL_AVENUE = "https://www.avenuedelabrique.com/lego-icons/10348-bonsai-d-erable-rouge-du-japon/p10780"
+URL_AVENUE = "https://www.avenuedelabrique.com/lego-harry-potter/76450-book-nook-le-poudlard-express/p10886"
 
 # Les vendeurs que nous voulons spécifiquement trouver
 VENDEURS_CIBLES = [
-    "amazon", "c discount", "fnac", "e.leclerc",
-    "auchan", "carrefour", "la grande récré", "ltoys"
+    "amazon", "cdiscount", "fnac", "e.leclerc",
+    "auchan", "carrefour", "la grande récré", "ltoys", "jouéclub", "kidinn"
 ]
 
 def scrape_avenue_de_la_brique(url):

@@ -31,8 +31,9 @@ MAP_VENDEURS = {
     "chez e.leclerc": "Leclerc",
     "chez auchan": "Auchan",
     "chez carrefour": "Carrefour",
-    "chez la grande récré": "LaGrandeRecre",
+    "chez la grande récré": "La Grande Récré",
     "chez ltoys": "Ltoys",
     "chez lego": "Lego",
-    "chez JouéClub": "JouéClub"
+    "chez jouéclub": "JouéClub",
+    "chez kidinn": "KidInn"
 }
