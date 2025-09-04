@@ -16,6 +16,7 @@ FICHIER_CONFIG_EXCEL = "config_sets.xlsx"
 
 # Dictionnaire pour mapper les domaines aux noms de colonnes dans l'Excel
 DOMAIN_TO_COLUMN_MAP = {
+    "avenuedelabrique.com": "URL_AvenueDeLaBrique",
     "amazon.fr": "URL_Amazon",
     "amzn.eu": "URL_Amazon",
     "lego.com": "URL_Lego",
