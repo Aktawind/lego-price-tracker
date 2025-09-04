@@ -65,13 +65,28 @@ def get_lego_metadata(set_id):
 
         # === NOMBRE DE PIÈCES ===
         nb_pieces = "N/A"
+        # Plan A : Données d'accessibilité (le plus fiable)
         try:
             pieces_p = soup.find(lambda tag: tag.name == 'p' and 'visually-hidden' in tag.get('class', []) and 'nombre de pièces' in tag.get_text(strip=True).lower())
             if pieces_p:
                 match = re.search(r'\d+', pieces_p.get_text())
-                if match: nb_pieces = match.group(0)
-        except Exception as e:
-            logging.error(f"Erreur lors de l'extraction du nombre de pièces : {e}")
+                if match:
+                    nb_pieces = match.group(0)
+        except Exception:
+            pass # On continue silencieusement si ça échoue
+
+        # Plan B : Attribut data-test (si le Plan A a échoué)
+        if nb_pieces == "N/A":
+            logging.info("  -> Plan A pour les pièces (visually-hidden) a échoué, tentative du Plan B (data-test)...")
+            # On cherche l'un des data-test connus
+            pieces_elem = soup.select_one('[data-test="pieces-value"]')
+            if pieces_elem:
+                # On prend le texte de l'élément, qui devrait être le nombre
+                nb_pieces = pieces_elem.text.strip()
+        
+        # Message final si tout a échoué
+        if nb_pieces == "N/A":
+            logging.warning(f"Impossible de trouver le nombre de pièces pour {set_id} avec toutes les méthodes.")
             
         # --- COLLECTION ---
         collection = "N/A"

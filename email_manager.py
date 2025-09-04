@@ -27,7 +27,7 @@ def envoyer_email_recapitulatif(baisses_de_prix, email_config):
     
     for deal in baisses_de_prix:
         # On ajoute la mention "record" si c'est le cas
-        message_record = "🏆 NOUVEAU MEILLEUR PRIX SUR LE MARCHÉ !" if deal.get('est_un_record') else ""
+        message_record = "" #"🏆 NOUVEAU MEILLEUR PRIX SUR LE MARCHÉ !" if deal.get('est_un_record') else ""
         
         analyse_affaire = deal.get('analyse_affaire')
         message_affaire_txt = ""
