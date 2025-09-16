@@ -5,8 +5,9 @@ import logging
 import json
 import os
 import smtplib
-from email.mime.text import MIMEText
 from dotenv import load_dotenv
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 # --- CONFIGURATION ---
 URL_BONS_PLANS = "https://www.avenuedelabrique.com/promotions-et-bons-plans-lego"
@@ -29,13 +30,29 @@ def sauvegarder_deals_vus(deals_ids):
         json.dump(list(deals_ids), f, indent=4)
 
 def envoyer_email_alerte_deals(nouveaux_deals, email_config):
-    """Envoie un email récapitulatif pour les nouveaux deals trouvés."""
+    """Envoie un email récapitulatif avec une belle mise en page HTML pour les nouveaux deals."""
+    
     sujet = f"🔥 Alerte Bons Plans LEGO : {len(nouveaux_deals)} nouvelle(s) promotion(s) trouvée(s) !"
     
-    corps_email = "Bonjour,\n\nDe nouvelles promotions LEGO ont été détectées sur Avenue de la Brique :\n\n"
+    # On crée un email 'alternative' pour avoir une version texte et une version HTML
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = sujet
+    msg['From'] = email_config['adresse']
+    msg['To'] = email_config['destinataire']
+
+    # On prépare les deux versions du corps de l'email
+    text_body = "Bonjour,\n\nDe nouvelles promotions LEGO ont été détectées sur Avenue de la Brique :\n\n"
+    html_body = """
+    <html>
+      <head></head>
+      <body style="font-family: sans-serif;">
+        <h2>Bonjour,</h2>
+        <p>De nouvelles promotions LEGO ont été détectées sur Avenue de la Brique :</p>
+    """
     
     for deal in nouveaux_deals:
-        corps_email += (
+        # Construction de la version TEXTE
+        text_body += (
             f"--------------------\n"
             f"MARCHAND: {deal['marchand']}\n"
             f"OFFRE: {deal['titre']}\n"
@@ -43,11 +60,25 @@ def envoyer_email_alerte_deals(nouveaux_deals, email_config):
             f"LIEN: {deal['url']}\n"
         )
         
-    msg = MIMEText(corps_email)
-    msg['Subject'] = sujet
-    msg['From'] = email_config['adresse']
-    msg['To'] = email_config['destinataire']
+        # Construction de la version HTML (avec la jolie mise en page)
+        html_body += f"""
+        <hr>
+        <div style="padding: 10px; border-left: 4px solid #f0ad4e; margin-bottom: 10px;">
+            <h3 style="margin-top:0; color:#333;">{deal['marchand']} : {deal['titre']}</h3>
+            <p style="line-height: 1.5; color: #555;">
+                {deal.get('details', '')}
+            </p>
+            <p><a href="{deal['url']}" style="background-color: #007bff; color: white; padding: 8px 12px; text-decoration: none; border-radius: 5px;">Voir le détail de l'offre</a></p>
+        </div>
+        """
 
+    text_body += f"\n\nConsultez la page des bons plans pour plus d'informations."
+    html_body += f'<hr><p>Ces informations proviennent de la page des bons plans. Consultez votre <a href="https://github.com/Aktawind/lego-price-tracker/wiki">tableau de bord</a> pour le suivi des prix de vos sets.</p></body></html>'
+    
+    # On attache les deux versions
+    msg.attach(MIMEText(text_body, 'plain'))
+    msg.attach(MIMEText(html_body, 'html'))
+    
     try:
         with smtplib.SMTP('smtp.gmail.com', 587) as smtp_server:
             smtp_server.starttls()
