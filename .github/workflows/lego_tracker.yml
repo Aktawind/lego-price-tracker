@@ -90,7 +90,7 @@ jobs:
           python-version: '3.11'
       
       - name: Install dependencies
-        run: pip install requests beautifulsoup4 pandas # pandas est nécessaire pour lire la config
+        run: pip install requests beautifulsoup4 pandas dotenv
 
       - name: Run Deal Hunter Script
         env:
