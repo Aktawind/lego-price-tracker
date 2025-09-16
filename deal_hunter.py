@@ -41,7 +41,7 @@ def envoyer_email_alerte_deals(nouveaux_deals, email_config):
     msg['To'] = email_config['destinataire']
 
     # On prépare les deux versions du corps de l'email
-    text_body = "Bonjour,\n\nDe nouvelles promotions LEGO ont été détectées sur Avenue de la Brique :\n\n"
+    text_body = "Bonjour,\n\nDe nouvelles promotions LEGO ont été détectées sur Avenue de la Brique.\n\n"
     html_body = """
     <html>
       <head></head>
