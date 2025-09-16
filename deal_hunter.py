@@ -103,6 +103,7 @@ def main():
                 logging.info(f"  -> NOUVEAU DEAL GÉNÉRAL TROUVÉ : {marchand} - {titre} (ID: {deal_id})")
 
         # --- 2. Scraper les Sets en Forte Promotion ---
+        '''
         sets_en_promo = soup.select('div.prods a.prodl')
         logging.info(f"Analyse de {len(sets_en_promo)} sets en promotion...")
         for set_promo in sets_en_promo:
@@ -124,6 +125,7 @@ def main():
                 })
                 deals_vus.add(deal_id)
                 logging.info(f"  -> NOUVEAU SET EN PROMO TROUVÉ : {titre} ({ref})")
+        '''
 
     except Exception as e:
         logging.error(f"Erreur lors du scraping de la page des bons plans : {e}")
@@ -140,6 +142,5 @@ def main():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     if not all(EMAIL_CONFIG.values()):
-        logging.error("Variables d'environnement pour l'email non configurées. Arrêt.")
-    else:
+        logging.warning("Configuration email incomplète. Le script s'exécutera sans envoyer de notifications.")
         main()
