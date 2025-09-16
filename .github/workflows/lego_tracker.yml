@@ -77,3 +77,32 @@ jobs:
           GIT_USER: "github-actions[bot]"
           GIT_EMAIL: "github-actions[bot]@users.noreply.github.com"
           WIKI_URL: https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }}.wiki.git
+  run-deal-hunter:
+    name: Run Deal Hunter
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4 pandas dotenv
+
+      - name: Run Deal Hunter Script
+        env:
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE }}
+        run: python deal_hunter.py
+
+      - name: Commit and push seen deals file
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add deals_vus.json
+          # On commite seulement si le fichier a changé
+          git diff --cached --quiet || git commit -m "Update seen deals list" && git push
