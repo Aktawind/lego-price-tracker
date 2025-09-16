@@ -6,18 +6,12 @@ import json
 import os
 import smtplib
 from email.mime.text import MIMEText
+from dotenv import load_dotenv
 
 # --- CONFIGURATION ---
 URL_BONS_PLANS = "https://www.avenuedelabrique.com/promotions-et-bons-plans-lego"
 FICHIER_MEMOIRE = "deals_vus.json"
 URL_BASE_AVENUE = "https://www.avenuedelabrique.com"
-
-# Configuration Email (à lire depuis les secrets GitHub)
-EMAIL_CONFIG = {
-    "adresse": os.getenv('GMAIL_ADDRESS'),
-    "mot_de_passe": os.getenv('GMAIL_APP_PASSWORD'),
-    "destinataire": os.getenv('MAIL_DESTINATAIRE')
-}
 
 def charger_deals_vus():
     """Charge la liste des ID de deals déjà vus depuis le fichier JSON."""
@@ -34,7 +28,7 @@ def sauvegarder_deals_vus(deals_ids):
     with open(FICHIER_MEMOIRE, 'w', encoding='utf-8') as f:
         json.dump(list(deals_ids), f, indent=4)
 
-def envoyer_email_alerte_deals(nouveaux_deals):
+def envoyer_email_alerte_deals(nouveaux_deals, email_config):
     """Envoie un email récapitulatif pour les nouveaux deals trouvés."""
     sujet = f"🔥 Alerte Bons Plans LEGO : {len(nouveaux_deals)} nouvelle(s) promotion(s) trouvée(s) !"
     
@@ -51,13 +45,13 @@ def envoyer_email_alerte_deals(nouveaux_deals):
         
     msg = MIMEText(corps_email)
     msg['Subject'] = sujet
-    msg['From'] = EMAIL_CONFIG['adresse']
-    msg['To'] = EMAIL_CONFIG['destinataire']
+    msg['From'] = email_config['adresse']
+    msg['To'] = email_config['destinataire']
 
     try:
         with smtplib.SMTP('smtp.gmail.com', 587) as smtp_server:
             smtp_server.starttls()
-            smtp_server.login(EMAIL_CONFIG['adresse'], EMAIL_CONFIG['mot_de_passe'])
+            smtp_server.login(email_config['adresse'], email_config['mot_de_passe'])
             smtp_server.send_message(msg)
         logging.info("Email d'alerte pour les nouveaux bons plans envoyé !")
     except Exception as e:
@@ -65,6 +59,14 @@ def envoyer_email_alerte_deals(nouveaux_deals):
 
 def main():
     logging.info("Lancement du chasseur de bons plans...")
+
+    load_dotenv()
+    EMAIL_CONFIG = {
+        "adresse": os.getenv('GMAIL_ADDRESS'),
+        "mot_de_passe": os.getenv('GMAIL_APP_PASSWORD'),
+        "destinataire": os.getenv('MAIL_DESTINATAIRE')
+    }
+    config_email_complete = all(EMAIL_CONFIG.values())
     
     deals_vus = charger_deals_vus()
     nouveaux_deals = []
@@ -133,14 +135,16 @@ def main():
 
     # --- 3. Envoyer les notifications et sauvegarder ---
     if nouveaux_deals:
-        logging.info(f"{len(nouveaux_deals)} nouvelles promotions à notifier.")
-        envoyer_email_alerte_deals(nouveaux_deals)
+        if config_email_complete:
+            logging.info(f"{len(nouveaux_deals)} nouvelles promotions à notifier.")
+            envoyer_email_alerte_deals(nouveaux_deals, EMAIL_CONFIG)
+        else:
+            logging.warning("Aucun email envoyé pour les deals car la configuration est incomplète.")
         sauvegarder_deals_vus(deals_vus)
     else:
         logging.info("Aucune nouvelle promotion détectée.")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-    if not all(EMAIL_CONFIG.values()):
-        logging.warning("Configuration email incomplète. Le script s'exécutera sans envoyer de notifications.")
-        main()
+    logging.warning("Configuration email incomplète. Le script s'exécutera sans envoyer de notifications.")
+    main()
