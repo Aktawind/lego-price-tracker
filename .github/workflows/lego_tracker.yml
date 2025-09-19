@@ -66,7 +66,7 @@ jobs:
           
           # On commite seulement s'il y a des changements à commiter
           if ! git diff --cached --quiet; then
-            git commit -m "chore(data): Update price, config and deal data"
+            git commit -m "Update price, config and deal data"
             git push
           else
             echo "No data changes to commit."
