@@ -1,108 +1,83 @@
-name: Lego Price Tracker
+name: Lego Tracker Workflow
 
 permissions:
   contents: write
 
-# Déclencheurs : 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 5 * * *'
+    - cron: '0 5 * * *' # Votre heure de lancement
 
-# Tâches : 
 jobs:
-  run-tracker:
-    # La machine virtuelle sur laquelle le script va tourner
+  # On n'a plus qu'un seul et unique job qui fait tout dans l'ordre
+  build-and-update:
+    name: Scrape Prices, Deals and Update Wiki
     runs-on: ubuntu-latest
     steps:
-      # Récupérer le code du dépôt
+      # --- ÉTAPE 1 : PRÉPARATION ---
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Configurer Chrome pour Selenium
       - name: Setup Chrome
         uses: browser-actions/setup-chrome@v1
-
-      # Configurer Python
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      # Installer les librairies nécessaires
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      # Générer le fichier de configuration et commit si changements
-      - name: Generate Config and Commit Changes
-        run: |
-          pip install pandas openpyxl requests beautifulsoup4
-          python config_generator.py
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git add .
-          if ! git diff --cached --quiet; then
-            git commit -m "Automatically update sets from .txt files"
-            git push
-          else
-            echo "No new set configuration to commit."
-          fi
-
-      # Lancer le scraper d'Avenue de la Brique
-      - name: Scrape Avenue de la Brique
-        run: python avenue_scraper.py
-
-      # Lancer le script Python
-      - name: Run Lego Price Tracker
-        id: run_script
-        env:
-          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE }}
-        run: python catch_lego_price.py
-
-      # Commit du fichier Excel
-      - name: Commit and push if changed
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git add prix_lego.xlsx
-          git diff-index --quiet HEAD || git commit -m "Update price data" && git push
-
-      - name: Generate and push Wiki
-        run: python generer_wiki.py
-        env:
-          GIT_USER: "github-actions[bot]"
-          GIT_EMAIL: "github-actions[bot]@users.noreply.github.com"
-          WIKI_URL: https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }}.wiki.git
-  run-deal-hunter:
-    name: Run Deal Hunter
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       
-      - name: Install dependencies
-        run: pip install requests beautifulsoup4 pandas dotenv
+      - name: Install All Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Run Deal Hunter Script
+      # --- ÉTAPE 2 : EXÉCUTION DES SCRIPTS DE COLLECTE ---
+      # On exécute tous les scripts qui modifient les fichiers de données
+
+      - name: Run Config Generator
+        run: python config_generator.py
+
+      - name: Run Avenue de la Brique Scraper
+        run: python avenue_scraper.py
+      
+      - name: Run Deal Hunter (Promotions)
         env:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE }}
         run: python deal_hunter.py
 
-      - name: Commit and push seen deals file
+      - name: Run Main Price Tracker
+        env:
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE }}
+        run: python catch_lego_price.py
+
+      # --- ÉTAPE 3 : COMMIT UNIQUE DE TOUS LES CHANGEMENTS DE DONNÉES ---
+      # On rassemble ici TOUS les changements de TOUS les scripts précédents
+      - name: Commit data files changes
         run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git add deals_vus.json
-          # On commite seulement si le fichier a changé
-          git diff --cached --quiet || git commit -m "Update seen deals list" && git push
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          # On ajoute tous les fichiers de données potentiellement modifiés ou supprimés
+          git add config_sets.xlsx prix_lego.xlsx deals_du_jour.json deals_vus.json *.txt
+          
+          # On commite seulement s'il y a des changements à commiter
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(data): Update price, config and deal data"
+            git push
+          else
+            echo "No data changes to commit."
+          fi
+
+      # --- ÉTAPE 4 : GÉNÉRATION ET PUSH DU WIKI ---
+      # Cette étape ne se lance qu'après que les données ont été sauvegardées
+      - name: Generate and push Wiki
+        run: python generer_wiki.py
+        env:
+          # On utilise le PAT pour s'assurer d'avoir les droits d'écriture sur le wiki
+          WIKI_URL: https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }}.wiki.git
+          GIT_USER: "github-actions[bot]"
+          GIT_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
