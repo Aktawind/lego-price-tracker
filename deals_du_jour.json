@@ -92,7 +92,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/125668",
-            "prix": 165.61
+            "prix": 161.99
         },
         {
             "site": "Lego",
@@ -196,7 +196,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/114082",
-            "prix": 394.99
+            "prix": 389.99
         },
         {
             "site": "Auchan",
@@ -206,7 +206,7 @@
         {
             "site": "KidInn",
             "url": "https://www.avenuedelabrique.com/go/px/114146",
-            "prix": 425.49
+            "prix": 424.99
         },
         {
             "site": "Lego",
@@ -492,7 +492,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/126547",
-            "prix": 191.21
+            "prix": 196.84
         },
         {
             "site": "Lego",
@@ -601,7 +601,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/126542",
-            "prix": 89.64
+            "prix": 89.56
         },
         {
             "site": "Lego",
@@ -937,11 +937,6 @@
             "prix": 19.99
         },
         {
-            "site": "Carrefour",
-            "url": "https://www.avenuedelabrique.com/go/px/119498",
-            "prix": 19.99
-        },
-        {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/118865",
             "prix": 19.99
@@ -1046,9 +1041,14 @@
             "prix": 22.99
         },
         {
+            "site": "Amazon",
+            "url": "https://www.avenuedelabrique.com/go/px/116197",
+            "prix": 23.54
+        },
+        {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/121488",
-            "prix": 24.99
+            "prix": 24.95
         },
         {
             "site": "Lego",
@@ -1069,11 +1069,6 @@
             "site": "Ltoys",
             "url": "https://www.avenuedelabrique.com/go/px/125230",
             "prix": 26.99
-        },
-        {
-            "site": "Amazon",
-            "url": "https://www.avenuedelabrique.com/go/px/116197",
-            "prix": 30.49
         }
     ],
     "42154": [
