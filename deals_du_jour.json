@@ -196,7 +196,7 @@
         {
             "site": "KidInn",
             "url": "https://www.avenuedelabrique.com/go/px/114146",
-            "prix": 424.99
+            "prix": 405.99
         },
         {
             "site": "Lego",
@@ -482,7 +482,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/126547",
-            "prix": 190.9
+            "prix": 191.14
         },
         {
             "site": "Lego",
@@ -591,7 +591,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/126542",
-            "prix": 89.5
+            "prix": 89.45
         },
         {
             "site": "Lego",
@@ -966,7 +966,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/111259",
-            "prix": 32.42
+            "prix": 32.48
         },
         {
             "site": "Auchan",
@@ -1001,11 +1001,6 @@
     ],
     "77246": [
         {
-            "site": "Cdiscount",
-            "url": "https://www.avenuedelabrique.com/go/px/120362",
-            "prix": 18.99
-        },
-        {
             "site": "Leclerc",
             "url": "https://www.avenuedelabrique.com/go/px/120890",
             "prix": 18.99
@@ -1036,6 +1031,11 @@
             "prix": 26.99
         },
         {
+            "site": "Cdiscount",
+            "url": "https://www.avenuedelabrique.com/go/px/120362",
+            "prix": 26.99
+        },
+        {
             "site": "La Grande Récré",
             "url": "https://www.avenuedelabrique.com/go/px/122189",
             "prix": 26.99
@@ -1053,15 +1053,10 @@
         {
             "site": "Amazon",
             "url": "https://www.avenuedelabrique.com/go/px/116197",
-            "prix": 30.12
+            "prix": 30.02
         }
     ],
     "42154": [
-        {
-            "site": "Carrefour",
-            "url": "https://www.avenuedelabrique.com/go/px/98595",
-            "prix": 79.99
-        },
         {
             "site": "Cdiscount",
             "url": "https://www.avenuedelabrique.com/go/px/92722",
