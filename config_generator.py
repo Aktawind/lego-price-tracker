@@ -13,6 +13,7 @@ from selenium.webdriver.support import expected_conditions as EC
 
 
 FICHIER_CONFIG_EXCEL = "config_sets.xlsx"
+FICHIER_LISTE_SETS = "sets_a_analyser.txt"
 
 # Dictionnaire pour mapper les domaines aux noms de colonnes dans l'Excel
 DOMAIN_TO_COLUMN_MAP = {
@@ -144,38 +145,75 @@ def process_set_file(file_path):
     return nouvelle_ligne
 
 def main():
-    # On ignore les fichiers cachés et on s'assure que le nom est un nombre
-    fichiers_a_traiter = [f for f in os.listdir() if not f.startswith('.') and os.path.splitext(os.path.basename(f))[0].isdigit()]
+    logging.info("Lancement du générateur de configuration...")
+    config_changed = False
 
-    if not fichiers_a_traiter:
-        logging.info("Aucun nouveau fichier de set à traiter.")
-        return
-
-    # Charger la configuration Excel existante
+    # --- ÉTAPE 1 : CHARGER L'ÉTAT ACTUEL ET L'ÉTAT DÉSIRÉ ---
     try:
         df_config = pd.read_excel(FICHIER_CONFIG_EXCEL, dtype=str)
     except FileNotFoundError:
-        logging.info(f"Fichier '{FICHIER_CONFIG_EXCEL}' non trouvé. Un nouveau sera créé.")
-        colonnes = ["ID_Set", "Nom_Set", "nbPieces", "Collection", "Image_URL"] + list(DOMAIN_TO_COLUMN_MAP.values())
-        df_config = pd.DataFrame(columns=list(dict.fromkeys(colonnes)))
+        df_config = pd.DataFrame(columns=["ID_Set"])
 
-    config_changed = False
+    try:
+        with open(FICHIER_LISTE_SETS, 'r', encoding='utf-8') as f:
+            ids_desires = {line.strip() for line in f if line.strip().isdigit()}
+    except FileNotFoundError:
+        logging.warning(f"'{FICHIER_LISTE_SETS}' non trouvé. Aucune synchronisation de liste ne sera effectuée.")
+        ids_desires = set(df_config['ID_Set'].tolist()) # On considère que la liste actuelle est la bonne
 
-    for file_path in fichiers_a_traiter:
+    ids_actuels = set(df_config['ID_Set'].tolist())
+
+    # --- ÉTAPE 2 : SYNCHRONISATION (AJOUTS ET SUPPRESSIONS DE LA LISTE) ---
+    
+    # Sets à supprimer
+    ids_a_supprimer = ids_actuels - ids_desires
+    if ids_a_supprimer:
+        logging.info(f"Suppression des sets non présents dans la liste : {ids_a_supprimer}")
+        df_config = df_config[~df_config['ID_Set'].isin(ids_a_supprimer)]
+        config_changed = True
+        # Nettoyer l'historique
+        try:
+            df_historique = pd.read_excel(FICHIER_HISTORIQUE, dtype=str)
+            df_historique_nettoye = df_historique[~df_historique['ID_Set'].isin(ids_a_supprimer)]
+            df_historique_nettoye.to_excel(FICHIER_HISTORIQUE, index=False)
+            logging.info(f"Historique des prix nettoyé pour les sets supprimés.")
+        except FileNotFoundError: pass
+
+    # Sets à ajouter
+    ids_a_ajouter = ids_desires - ids_actuels
+    if ids_a_ajouter:
+        logging.info(f"Ajout de nouveaux sets depuis la liste : {ids_a_ajouter}")
+        nouvelles_lignes = []
+        for set_id in ids_a_ajouter:
+            metadata = get_lego_metadata(set_id)
+            if metadata:
+                nouvelle_ligne = {
+                    "ID_Set": set_id, "Nom_Set": metadata['nom'], "nbPieces": metadata['nb_pieces'],
+                    "Collection": metadata['collection'], "Image_URL": metadata['image_url'],
+                    "URL_Lego": metadata['url_lego']
+                }
+                nouvelles_lignes.append(nouvelle_ligne)
+        
+        if nouvelles_lignes:
+            nouvelles_lignes_df = pd.DataFrame(nouvelles_lignes)
+            df_config = pd.concat([df_config, nouvelles_lignes_df], ignore_index=True)
+            config_changed = True
+
+    # --- ÉTAPE 3 : GESTION DES FICHIERS DE COMMANDE INDIVIDUELS (EN PRIORITÉ) ---
+    fichiers_commandes = [f for f in os.listdir() if not f.startswith('.') and os.path.splitext(os.path.basename(f))[0].isdigit()]
+    
+    for file_path in fichiers_commandes:
         set_id = os.path.splitext(os.path.basename(file_path))[0]
-        
-        # === DÉBUT DE LA CORRECTION : LECTURE UNIQUE ===
         with open(file_path, 'r', encoding='utf-8') as f:
-            lignes_du_fichier = f.readlines()
+            lignes = f.readlines()
         
-        contenu_simple = "".join(lignes_du_fichier).strip().lower()
-        # ===============================================
+        contenu_simple = "".join(lignes).strip().lower()
 
         if contenu_simple == 'delete':
-            logging.info(f"--- Fichier de suppression détecté pour le set ID: {set_id} ---")
+            # La commande 'delete' via fichier individuel a la priorité
             if set_id in df_config['ID_Set'].values:
                 df_config = df_config[df_config['ID_Set'] != set_id]
-                logging.info(f"Set {set_id} supprimé de la configuration.")
+                logging.info(f"Set {set_id} supprimé via fichier de commande.")
                 config_changed = True
 
                 try:
@@ -188,58 +226,34 @@ def main():
             else:
                 logging.warning(f"Le set {set_id} à supprimer n'a pas été trouvé.")
         else:
-            # On traite les URL depuis la liste lue au début
-            urls = [line.strip(' :\t\n\r') for line in lignes_du_fichier if line.strip()]
+            # Traitement des URL dans le fichier
+            urls = [line.strip(' :\t\n\r') for line in lignes if line.strip()]
+            if not urls: continue # Si le fichier est vide, on l'ignore
             
-            ligne_existante_index = df_config.index[df_config['ID_Set'] == set_id].tolist()
-
-            if ligne_existante_index:
-                logging.info(f"Le set {set_id} existe déjà. Fusion des nouvelles URL...")
-                index_a_modifier = ligne_existante_index[0]
-                
+            if set_id in df_config['ID_Set'].values:
+                logging.info(f"Fusion des URL du fichier {file_path} pour le set {set_id}...")
+                index_a_modifier = df_config.index[df_config['ID_Set'] == set_id].item()
                 for url in urls:
-                    url_assignee = False
-                    for domain, column_name in DOMAIN_TO_COLUMN_MAP.items():
+                    for domain, column in DOMAIN_TO_COLUMN_MAP.items():
                         if domain in url:
-                            df_config.loc[index_a_modifier, column_name] = url
-                            url_assignee = True
+                            df_config.loc[index_a_modifier, column] = url
                             break
-                    if not url_assignee:
-                        logging.warning(f"Domaine non reconnu pour l'URL : {url}")
+                config_changed = True
             else:
-                logging.info(f"Nouveau set {set_id}. Récupération des métadonnées...")
-                metadata = get_lego_metadata(set_id)
-                if not metadata:
-                    logging.error(f"Impossible de traiter {set_id}, métadonnées non récupérées.")
-                    continue
+                logging.warning(f"Le fichier {file_path} concerne un set ({set_id}) qui n'est pas dans la liste. Ajoutez-le à sets_a_analyser.txt d'abord.")
 
-                nouvelle_ligne = { "ID_Set": set_id, "Nom_Set": metadata['nom'], "nbPieces": metadata['nb_pieces'],
-                                   "Collection": metadata['collection'], "Image_URL": metadata['image_url'] }
-                urls.append(metadata['url_lego'])
-                
-                for url in urls:
-                    url_assignee = False
-                    for domain, column_name in DOMAIN_TO_COLUMN_MAP.items():
-                        if domain in url:
-                            nouvelle_ligne[column_name] = url
-                            url_assignee = True
-                            break
-                    if not url_assignee:
-                        logging.warning(f"Domaine non reconnu pour l'URL : {url}")
-                
-                nouvelle_ligne_df = pd.DataFrame([nouvelle_ligne])
-                df_config = pd.concat([df_config, nouvelle_ligne_df], ignore_index=True)
-            
-            config_changed = True
-        
+        # Correction du bug : On supprime le fichier après l'avoir traité
         os.remove(file_path)
-        logging.info(f"Fichier '{file_path}' traité et supprimé.")
+        logging.info(f"Fichier de commande '{file_path}' traité et supprimé.")
 
+    # --- ÉTAPE 4 : SAUVEGARDE FINALE ---
     if config_changed:
+        # On trie le DataFrame par ID de set pour un fichier propre
+        df_config = df_config.sort_values('ID_Set').reset_index(drop=True)
         df_config.to_excel(FICHIER_CONFIG_EXCEL, index=False)
         logging.info(f"Fichier '{FICHIER_CONFIG_EXCEL}' mis à jour.")
     else:
-        logging.info("Aucun changement apporté à la configuration.")
+        logging.info("Aucun changement de configuration nécessaire.")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
