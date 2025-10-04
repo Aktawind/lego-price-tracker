@@ -14,6 +14,7 @@ from selenium.webdriver.support import expected_conditions as EC
 
 FICHIER_CONFIG_EXCEL = "config_sets.xlsx"
 FICHIER_LISTE_SETS = "sets_a_analyser.txt"
+FICHIER_HISTORIQUE = "prix_lego.xlsx"
 
 # Dictionnaire pour mapper les domaines aux noms de colonnes dans l'Excel
 DOMAIN_TO_COLUMN_MAP = {
