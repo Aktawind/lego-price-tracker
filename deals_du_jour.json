@@ -249,6 +249,28 @@
             "prix": 95.99
         }
     ],
+    "31154": [
+        {
+            "site": "Lego",
+            "url": "https://www.avenuedelabrique.com/go/px/107635",
+            "prix": 49.99
+        },
+        {
+            "site": "Amazon",
+            "url": "https://www.avenuedelabrique.com/go/px/107711",
+            "prix": 55.94
+        },
+        {
+            "site": "Cdiscount",
+            "url": "https://www.avenuedelabrique.com/go/px/120627",
+            "prix": 71.07
+        },
+        {
+            "site": "KidInn",
+            "url": "https://www.avenuedelabrique.com/go/px/127736",
+            "prix": 78.49
+        }
+    ],
     "31167": [
         {
             "site": "Carrefour",
