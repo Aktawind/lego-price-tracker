@@ -1,14 +1,14 @@
 {
     "10289": [
         {
-            "site": "Amazon",
-            "url": "https://www.avenuedelabrique.com/go/px/76315",
-            "prix": 283.0
-        },
-        {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/79992",
             "prix": 299.99
+        },
+        {
+            "site": "Amazon",
+            "url": "https://www.avenuedelabrique.com/go/px/76315",
+            "prix": 311.0
         },
         {
             "site": "Rue du Commerce",
@@ -161,7 +161,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/123779",
-            "prix": 49.64
+            "prix": 48.31
         },
         {
             "site": "Auchan",
@@ -268,7 +268,7 @@
         {
             "site": "Cdiscount",
             "url": "https://www.avenuedelabrique.com/go/px/120627",
-            "prix": 69.84
+            "prix": 70.49
         },
         {
             "site": "KidInn",
@@ -305,7 +305,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/126542",
-            "prix": 84.44
+            "prix": 84.05
         },
         {
             "site": "Rue du Commerce",
@@ -402,7 +402,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/114082",
-            "prix": 388.99
+            "prix": 382.99
         },
         {
             "site": "KidInn",
@@ -803,7 +803,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/126547",
-            "prix": 185.1
+            "prix": 180.48
         },
         {
             "site": "La Grande Récré",
@@ -828,13 +828,18 @@
     ],
     "75639": [
         {
-            "site": "Auchan",
-            "url": "https://www.avenuedelabrique.com/go/px/127376",
-            "prix": 107.99
+            "site": "Cdiscount",
+            "url": "https://www.avenuedelabrique.com/go/px/127215",
+            "prix": 99.99
         },
         {
             "site": "Amazon",
             "url": "https://www.avenuedelabrique.com/go/px/127410",
+            "prix": 99.99
+        },
+        {
+            "site": "Auchan",
+            "url": "https://www.avenuedelabrique.com/go/px/127376",
             "prix": 107.99
         },
         {
@@ -846,11 +851,6 @@
             "site": "JouéClub",
             "url": "https://www.avenuedelabrique.com/go/px/127222",
             "prix": 109.99
-        },
-        {
-            "site": "Cdiscount",
-            "url": "https://www.avenuedelabrique.com/go/px/127215",
-            "prix": 127.54
         },
         {
             "site": "Rue du Commerce",
