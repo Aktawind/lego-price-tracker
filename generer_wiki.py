@@ -131,8 +131,10 @@ def generer_pages_wiki(df_config):
         seuil_bonne = prix_juste * SEUIL_BONNE_AFFAIRE if prix_juste else None
         seuil_tres_bonne = prix_juste * SEUIL_TRES_BONNE_AFFAIRE if prix_juste else None
         
-        nom_fichier_page = f"{id_set}-{nom_set.replace(' ', '-')}.md"
-        lien_wiki = nom_fichier_page[:-3]
+        # Nettoyage pour éviter que les ":" cassent les liens Wiki
+        nom_pour_url = nom_set.replace(':', '').replace(' ', '-')
+        nom_fichier_page = f"{id_set}-{nom_pour_url}.md"
+        lien_wiki = f"{id_set}-{nom_pour_url}"
 
         # --- Page d'accueil ---
         indicateur_deal = ""
