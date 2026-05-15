@@ -13,12 +13,12 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/131832",
-            "prix": 249.88
+            "prix": 241.99
         },
         {
             "site": "Rue du Commerce",
             "url": "https://www.avenuedelabrique.com/go/px/114957",
-            "prix": 263.99
+            "prix": 262.27
         },
         {
             "site": "Cdiscount",
@@ -62,7 +62,7 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/130594",
-            "prix": 64.59
+            "prix": 64.74
         },
         {
             "site": "Cdiscount",
@@ -72,7 +72,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/128881",
-            "prix": 70.24
+            "prix": 70.1
         }
     ],
     "10372": [
@@ -223,11 +223,6 @@
             "site": "Rue du Commerce",
             "url": "https://www.avenuedelabrique.com/go/px/137563",
             "prix": 79.19
-        },
-        {
-            "site": "Cdiscount",
-            "url": "https://www.avenuedelabrique.com/go/px/136326",
-            "prix": 101.6
         }
     ],
     "31218": [
@@ -308,6 +303,11 @@
         {
             "site": "Leclerc",
             "url": "https://www.avenuedelabrique.com/go/px/133693",
+            "prix": 18.99
+        },
+        {
+            "site": "Amazon",
+            "url": "https://www.avenuedelabrique.com/go/px/133386",
             "prix": 18.99
         },
         {
@@ -482,13 +482,13 @@
             "prix": 47.99
         },
         {
-            "site": "Carrefour",
-            "url": "https://www.avenuedelabrique.com/go/px/133930",
-            "prix": 49.6
-        },
-        {
             "site": "Lego",
             "url": "https://www.avenuedelabrique.com/go/px/131681",
+            "prix": 49.99
+        },
+        {
+            "site": "Carrefour",
+            "url": "https://www.avenuedelabrique.com/go/px/133930",
             "prix": 49.99
         },
         {
