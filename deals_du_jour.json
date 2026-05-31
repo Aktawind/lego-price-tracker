@@ -8,12 +8,12 @@
         {
             "site": "Amazon",
             "url": "https://www.avenuedelabrique.com/go/px/99864",
-            "prix": 219.77
+            "prix": 204.99
         },
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/131832",
-            "prix": 227.97
+            "prix": 223.97
         },
         {
             "site": "Cdiscount",
@@ -62,12 +62,12 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/130594",
-            "prix": 62.1
+            "prix": 62.15
         },
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/128881",
-            "prix": 65.61
+            "prix": 65.51
         }
     ],
     "10372": [
@@ -180,7 +180,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/93846",
-            "prix": 244.99
+            "prix": 235.72
         },
         {
             "site": "Amazon",
@@ -217,12 +217,22 @@
     ],
     "21367": [
         {
+            "site": "Ltoys",
+            "url": "https://www.avenuedelabrique.com/go/px/137345",
+            "prix": 159.99
+        },
+        {
             "site": "Cdiscount",
             "url": "https://www.avenuedelabrique.com/go/px/141295",
-            "prix": 169.45
+            "prix": 188.0
         }
     ],
     "31218": [
+        {
+            "site": "Cdiscount",
+            "url": "https://www.avenuedelabrique.com/go/px/131940",
+            "prix": 95.99
+        },
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/129010",
@@ -272,11 +282,6 @@
             "site": "La Grande Récré",
             "url": "https://www.avenuedelabrique.com/go/px/139443",
             "prix": 119.99
-        },
-        {
-            "site": "Cdiscount",
-            "url": "https://www.avenuedelabrique.com/go/px/131940",
-            "prix": 120.95
         }
     ],
     "31378": [
