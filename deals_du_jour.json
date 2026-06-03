@@ -6,19 +6,19 @@
             "prix": 204.99
         },
         {
+            "site": "Amazon",
+            "url": "https://www.avenuedelabrique.com/go/px/99864",
+            "prix": 204.99
+        },
+        {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/131832",
             "prix": 214.47
         },
         {
-            "site": "Amazon",
-            "url": "https://www.avenuedelabrique.com/go/px/99864",
-            "prix": 222.0
-        },
-        {
             "site": "Cdiscount",
             "url": "https://www.avenuedelabrique.com/go/px/106807",
-            "prix": 300.91
+            "prix": 271.97
         }
     ],
     "10365": [
@@ -47,7 +47,7 @@
         {
             "site": "KidInn",
             "url": "https://www.avenuedelabrique.com/go/px/116163",
-            "prix": 48.49
+            "prix": 45.49
         },
         {
             "site": "Lego",
@@ -55,19 +55,19 @@
             "prix": 49.99
         },
         {
-            "site": "Cdiscount",
-            "url": "https://www.avenuedelabrique.com/go/px/115565",
-            "prix": 60.31
-        },
-        {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/130594",
-            "prix": 60.63
+            "prix": 60.23
+        },
+        {
+            "site": "Cdiscount",
+            "url": "https://www.avenuedelabrique.com/go/px/115565",
+            "prix": 62.0
         },
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/128881",
-            "prix": 65.51
+            "prix": 64.85
         }
     ],
     "10372": [
@@ -217,8 +217,8 @@
     ],
     "21367": [
         {
-            "site": "JouéClub",
-            "url": "https://www.avenuedelabrique.com/go/px/141733",
+            "site": "Auchan",
+            "url": "https://www.avenuedelabrique.com/go/px/142120",
             "prix": 159.99
         },
         {
@@ -227,19 +227,14 @@
             "prix": 159.99
         },
         {
-            "site": "La Grande Récré",
-            "url": "https://www.avenuedelabrique.com/go/px/141832",
-            "prix": 159.99
+            "site": "Fnac",
+            "url": "https://www.avenuedelabrique.com/go/px/137684",
+            "prix": 175.99
         },
         {
             "site": "Cdiscount",
             "url": "https://www.avenuedelabrique.com/go/px/141295",
-            "prix": 182.05
-        },
-        {
-            "site": "Fnac",
-            "url": "https://www.avenuedelabrique.com/go/px/137684",
-            "prix": 235.66
+            "prix": 193.0
         }
     ],
     "31218": [
@@ -259,14 +254,19 @@
             "prix": 97.99
         },
         {
-            "site": "Carrefour",
-            "url": "https://www.avenuedelabrique.com/go/px/133901",
-            "prix": 117.92
+            "site": "Fnac",
+            "url": "https://www.avenuedelabrique.com/go/px/133164",
+            "prix": 99.99
         },
         {
             "site": "KidInn",
             "url": "https://www.avenuedelabrique.com/go/px/137738",
-            "prix": 118.99
+            "prix": 114.99
+        },
+        {
+            "site": "Carrefour",
+            "url": "https://www.avenuedelabrique.com/go/px/133901",
+            "prix": 117.92
         },
         {
             "site": "Rue du Commerce",
@@ -276,11 +276,6 @@
         {
             "site": "Lego",
             "url": "https://www.avenuedelabrique.com/go/px/129020",
-            "prix": 119.99
-        },
-        {
-            "site": "Fnac",
-            "url": "https://www.avenuedelabrique.com/go/px/129010",
             "prix": 119.99
         },
         {
@@ -301,8 +296,18 @@
     ],
     "31378": [
         {
+            "site": "JouéClub",
+            "url": "https://www.avenuedelabrique.com/go/px/134789",
+            "prix": 32.99
+        },
+        {
             "site": "Lego",
             "url": "https://www.avenuedelabrique.com/go/px/131695",
+            "prix": 34.99
+        },
+        {
+            "site": "La Grande Récré",
+            "url": "https://www.avenuedelabrique.com/go/px/139399",
             "prix": 34.99
         },
         {
@@ -313,14 +318,14 @@
     ],
     "31379": [
         {
-            "site": "Auchan",
-            "url": "https://www.avenuedelabrique.com/go/px/131902",
+            "site": "KidInn",
+            "url": "https://www.avenuedelabrique.com/go/px/137720",
             "prix": 19.99
         },
         {
-            "site": "KidInn",
-            "url": "https://www.avenuedelabrique.com/go/px/137720",
-            "prix": 20.99
+            "site": "Auchan",
+            "url": "https://www.avenuedelabrique.com/go/px/131902",
+            "prix": 19.99
         },
         {
             "site": "Cdiscount",
@@ -489,11 +494,6 @@
     ],
     "43281": [
         {
-            "site": "Cdiscount",
-            "url": "https://www.avenuedelabrique.com/go/px/131933",
-            "prix": 47.99
-        },
-        {
             "site": "Lego",
             "url": "https://www.avenuedelabrique.com/go/px/131681",
             "prix": 49.99
@@ -501,11 +501,6 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/133930",
-            "prix": 49.99
-        },
-        {
-            "site": "Fnac",
-            "url": "https://www.avenuedelabrique.com/go/px/131551",
             "prix": 49.99
         },
         {
@@ -517,6 +512,16 @@
             "site": "La Grande Récré",
             "url": "https://www.avenuedelabrique.com/go/px/139487",
             "prix": 49.99
+        },
+        {
+            "site": "Fnac",
+            "url": "https://www.avenuedelabrique.com/go/px/133167",
+            "prix": 56.98
+        },
+        {
+            "site": "Cdiscount",
+            "url": "https://www.avenuedelabrique.com/go/px/131933",
+            "prix": 58.08
         }
     ],
     "45200": [
