@@ -101,7 +101,7 @@
         {
             "site": "KidInn",
             "url": "https://www.avenuedelabrique.com/go/px/140796",
-            "prix": 337.99
+            "prix": 334.49
         }
     ],
     "11376": [
@@ -170,7 +170,7 @@
         {
             "site": "Amazon",
             "url": "https://www.avenuedelabrique.com/go/px/97653",
-            "prix": 260.85
+            "prix": 269.95
         }
     ],
     "21365": [
@@ -204,7 +204,7 @@
         {
             "site": "Amazon",
             "url": "https://www.avenuedelabrique.com/go/px/142397",
-            "prix": 156.82
+            "prix": 149.99
         },
         {
             "site": "Carrefour",
@@ -261,7 +261,7 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/133901",
-            "prix": 118.44
+            "prix": 118.43
         },
         {
             "site": "Rue du Commerce",
@@ -281,6 +281,11 @@
         {
             "site": "JouéClub",
             "url": "https://www.avenuedelabrique.com/go/px/134607",
+            "prix": 119.99
+        },
+        {
+            "site": "Ltoys",
+            "url": "https://www.avenuedelabrique.com/go/px/129034",
             "prix": 119.99
         },
         {
@@ -340,7 +345,7 @@
         {
             "site": "KidInn",
             "url": "https://www.avenuedelabrique.com/go/px/137720",
-            "prix": 22.99
+            "prix": 23.99
         },
         {
             "site": "Lego",
