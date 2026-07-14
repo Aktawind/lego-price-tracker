@@ -58,6 +58,11 @@
             "site": "La Grande Récré",
             "url": "https://www.avenuedelabrique.com/go/px/139401",
             "prix": 349.99
+        },
+        {
+            "site": "KidInn",
+            "url": "https://www.avenuedelabrique.com/go/px/146242",
+            "prix": 497.99
         }
     ],
     "10370": [
@@ -254,7 +259,7 @@
         {
             "site": "Amazon",
             "url": "https://www.avenuedelabrique.com/go/px/97653",
-            "prix": 274.13
+            "prix": 274.11
         }
     ],
     "21351": [
@@ -293,7 +298,7 @@
         {
             "site": "KidInn",
             "url": "https://www.avenuedelabrique.com/go/px/137738",
-            "prix": 113.99
+            "prix": 113.49
         },
         {
             "site": "Carrefour",
