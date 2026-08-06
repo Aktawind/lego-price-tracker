@@ -11,6 +11,11 @@
             "prix": 199.99
         },
         {
+            "site": "Fnac",
+            "url": "https://www.avenuedelabrique.com/go/px/121721",
+            "prix": 199.99
+        },
+        {
             "site": "Ltoys",
             "url": "https://www.avenuedelabrique.com/go/px/124633",
             "prix": 199.99
@@ -18,12 +23,7 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/130445",
-            "prix": 209.68
-        },
-        {
-            "site": "Fnac",
-            "url": "https://www.avenuedelabrique.com/go/px/121721",
-            "prix": 212.98
+            "prix": 209.49
         },
         {
             "site": "KidInn",
@@ -72,7 +72,7 @@
         {
             "site": "KidInn",
             "url": "https://www.avenuedelabrique.com/go/px/146242",
-            "prix": 427.99
+            "prix": 428.99
         }
     ],
     "10370": [
@@ -84,7 +84,7 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/130594",
-            "prix": 60.41
+            "prix": 60.39
         },
         {
             "site": "Cdiscount",
@@ -143,7 +143,7 @@
         {
             "site": "KidInn",
             "url": "https://www.avenuedelabrique.com/go/px/140796",
-            "prix": 302.49
+            "prix": 302.99
         }
     ],
     "11376": [
@@ -291,7 +291,7 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/129529",
-            "prix": 233.74
+            "prix": 233.3
         },
         {
             "site": "Fnac",
@@ -301,7 +301,7 @@
         {
             "site": "Cdiscount",
             "url": "https://www.avenuedelabrique.com/go/px/135133",
-            "prix": 250.95
+            "prix": 250.72
         }
     ],
     "31218": [
@@ -333,7 +333,7 @@
         {
             "site": "KidInn",
             "url": "https://www.avenuedelabrique.com/go/px/137738",
-            "prix": 110.49
+            "prix": 110.99
         },
         {
             "site": "Rue du Commerce",
