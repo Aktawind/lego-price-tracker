@@ -15,8 +15,9 @@ PRIX_MOYEN_PAR_COLLECTION = {
     "One Piece": 0.0886,
     "Speed Champions": 0.0886,
     "Star Wars™": 0.1024, 
-    "LEGO® Super Mario™": 0.1108, 
-    "Technic": 0.1211, 
+    "LEGO® Super Mario™": 0.1108,
+    "Technic": 0.1211,
+    "LEGO® Education": 0.100,
     "default": 0.100
 }
 

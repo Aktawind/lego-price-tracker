@@ -1,4 +1,4 @@
-from config_shared import construire_slug_wiki, construire_url_wiki_set, email_config_complete
+from config_shared import construire_slug_wiki, construire_url_wiki_set, email_config_complete, PRIX_MOYEN_PAR_COLLECTION
 
 
 def test_construire_slug_wiki_remplace_espaces_et_deux_points():
@@ -17,3 +17,10 @@ def test_email_config_complete():
     assert email_config_complete({"api_key": None, "destinataire": "a@a.com"}) is False
     assert email_config_complete({"api_key": "abc", "destinataire": None}) is False
     assert email_config_complete({}) is False
+
+
+def test_prix_moyen_par_collection_valeurs_connues():
+    # Le taux par défaut (sets sans collection connue) est de 10 centimes/pièce.
+    assert PRIX_MOYEN_PAR_COLLECTION['default'] == 0.100
+    assert PRIX_MOYEN_PAR_COLLECTION['LEGO® Icons'] == 0.0883
+    assert PRIX_MOYEN_PAR_COLLECTION['LEGO® Education'] == 0.100

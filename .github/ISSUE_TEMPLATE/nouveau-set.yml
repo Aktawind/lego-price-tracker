@@ -66,6 +66,7 @@ body:
         - "Star Wars™"
         - "LEGO® Super Mario™"
         - "Technic"
+        - "LEGO® Education"
         - "Autre thème (précise-le dans le champ suivant)"
       default: 0
     validations:
