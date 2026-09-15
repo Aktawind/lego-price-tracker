@@ -41,12 +41,25 @@ def marque_est_lego(marque):
     return pd.isna(marque) or str(marque).strip() == '' or str(marque).strip().upper() == 'LEGO'
 
 
+# Valeurs qui ne sont jamais un vrai thème/collection, même si une stratégie
+# d'extraction les trouve (ex: le fil d'Ariane ou la marque générique valent
+# souvent littéralement "LEGO", pas le nom de la gamme).
+VALEURS_COLLECTION_GENERIQUES = {'lego', 'lego.com', 'accueil', 'home', 'shop', 'produits', 'products', 'sets'}
+
+
+def _est_collection_utilisable(texte):
+    return bool(texte) and texte.strip().lower() not in VALEURS_COLLECTION_GENERIQUES
+
+
 def extraire_collection(soup):
     """Essaie plusieurs stratégies pour trouver le thème/la collection LEGO d'un
     set, du plus stable au moins stable (les classes CSS de lego.com changent
     régulièrement, contrairement aux données structurées et à l'URL des liens).
-    Retourne (collection, methode) où methode est None si rien n'a été trouvé
-    (utile pour logguer un diagnostic exploitable sans avoir accès à la page)."""
+    Retourne (collection, methode) où methode est None si rien d'utilisable n'a
+    été trouvé (utile pour logguer un diagnostic exploitable sans avoir accès à
+    la page). Les valeurs trop génériques (ex: "LEGO" tout court) sont ignorées :
+    ce n'est pas un vrai thème, et mieux vaut laisser le champ vide que le
+    remplir avec une valeur trompeuse."""
 
     # Plan A : données structurées JSON-LD (schema.org), pensées pour le SEO et
     # donc en général plus stables que les classes CSS générées par le build JS.
@@ -61,17 +74,17 @@ def extraire_collection(soup):
                 if not isinstance(objet, dict):
                     continue
                 categorie = objet.get('category')
-                if isinstance(categorie, str) and categorie.strip():
+                if isinstance(categorie, str) and _est_collection_utilisable(categorie):
                     return categorie.strip(), 'json-ld:category'
                 marque = objet.get('brand')
-                if isinstance(marque, dict) and marque.get('name') and marque['name'].strip().lower() != 'lego':
+                if isinstance(marque, dict) and _est_collection_utilisable(marque.get('name')):
                     return marque['name'].strip(), 'json-ld:brand'
                 if objet.get('@type') == 'BreadcrumbList':
                     items = objet.get('itemListElement') or []
                     noms = [i.get('name', '').strip() for i in items if isinstance(i, dict) and i.get('name')]
                     # Le premier élément est en général "Accueil"/"LEGO.com", le dernier le nom du set :
                     # le thème est généralement l'avant-dernier.
-                    if len(noms) >= 2:
+                    if len(noms) >= 2 and _est_collection_utilisable(noms[-2]):
                         return noms[-2], 'json-ld:breadcrumb'
     except Exception:
         pass
@@ -82,7 +95,7 @@ def extraire_collection(soup):
         lien_theme = soup.select_one('a[href*="/themes/"]')
         if lien_theme:
             texte = lien_theme.get_text(strip=True)
-            if texte:
+            if _est_collection_utilisable(texte):
                 return texte, 'lien-theme'
     except Exception:
         pass
@@ -93,7 +106,7 @@ def extraire_collection(soup):
         collection_elem = soup.select_one('a[class*="BrandLink"] img')
         if collection_elem and collection_elem.has_attr('alt'):
             texte = collection_elem['alt'].strip().replace('Logo', '').strip()
-            if texte:
+            if _est_collection_utilisable(texte):
                 return texte, 'css-brandlink'
     except Exception:
         pass

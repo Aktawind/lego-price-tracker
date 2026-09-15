@@ -28,6 +28,24 @@ HEADERS = {
     "Accept": "application/vnd.github+json",
 }
 
+OPTION_COLLECTION_AUTO = "Je ne sais pas / laisser la détection automatique essayer"
+OPTION_COLLECTION_AUTRE = "Autre thème (précise-le dans le champ suivant)"
+
+
+def resoudre_collection(champs, valeur_scrapee):
+    """La détection automatique de la collection sur Lego.com n'est pas fiable
+    (le design du site change trop souvent) : on donne toujours la priorité au
+    choix fait dans le formulaire, et on ne retombe sur la valeur scrapée que
+    si l'utilisateur a explicitement laissé la détection automatique faire l'essai."""
+    choix = (champs.get("Collection (uniquement pour un set LEGO)") or "").strip()
+    if not choix or choix == OPTION_COLLECTION_AUTO:
+        return valeur_scrapee
+    if choix == OPTION_COLLECTION_AUTRE:
+        autre = (champs.get("Nom de la collection (si 'Autre thème' choisi ci-dessus)") or "").strip()
+        return autre or valeur_scrapee
+    return choix
+
+
 URLS_PAR_CHAMP = {
     "URL Lego.com": "URL_Lego",
     "URL Amazon": "URL_Amazon",
@@ -130,7 +148,7 @@ def traiter_ajout(champs):
             "ID_Set": id_set,
             "Nom_Set": metadata['nom'],
             "nbPieces": metadata['nb_pieces'],
-            "Collection": metadata['collection'],
+            "Collection": resoudre_collection(champs, metadata['collection']),
             "Image_URL": metadata['image_url'],
             "URL_Lego": metadata['url_lego'],
             "Marque": "LEGO",

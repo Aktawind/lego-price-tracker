@@ -37,6 +37,29 @@ def test_plan_a_ignores_lego_brand():
     assert collection == "N/A"
 
 
+def test_plan_a_ignores_generic_category():
+    # "category": "LEGO" est une valeur générique observée en pratique sur lego.com,
+    # pas le nom d'une gamme -- ne doit jamais finir en config.
+    html = '''<script type="application/ld+json">
+    {"@type": "Product", "category": "LEGO"}
+    </script>'''
+    collection, methode = extraire_collection(_soup(html))
+    assert methode is None
+    assert collection == "N/A"
+
+
+def test_plan_a_breadcrumb_sans_theme_est_ignore():
+    # Fil d'Ariane à 3 niveaux seulement (Accueil > LEGO > Set) : pas de vrai thème dedans.
+    html = '''<script type="application/ld+json">
+    {"@type": "BreadcrumbList", "itemListElement": [
+        {"name": "Accueil"}, {"name": "LEGO"}, {"name": "Corvette"}
+    ]}
+    </script>'''
+    collection, methode = extraire_collection(_soup(html))
+    assert methode is None
+    assert collection == "N/A"
+
+
 def test_plan_b_lien_theme():
     html = '<a href="/fr-fr/themes/star-wars">Star Wars</a>'
     collection, methode = extraire_collection(_soup(html))

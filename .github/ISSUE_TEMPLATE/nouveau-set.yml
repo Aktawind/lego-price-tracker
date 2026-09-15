@@ -7,8 +7,10 @@ body:
     attributes:
       value: |
         Remplis ce formulaire pour ajouter un nouveau set au suivi. Pour un set **LEGO**,
-        seul l'ID du set suffit en général : le nom, l'image, le nombre de pièces et la
-        collection sont récupérés automatiquement sur Lego.com.
+        seul l'ID du set suffit en général : le nom, l'image et le nombre de pièces sont
+        récupérés automatiquement sur Lego.com. La **collection**, elle, se choisit dans
+        le menu déroulant ci-dessous — la détection automatique sur Lego.com n'est pas
+        fiable (le design du site change trop souvent), donc autant la préciser toi-même.
 
         Pour une **autre marque** (ex: Lumibricks), remplis aussi le nom, l'image et le
         lien Amazon à la main, car il n'y a pas de fiche Lego.com à consulter.
@@ -41,6 +43,39 @@ body:
       label: "Nom du set"
       description: "Obligatoire si la marque n'est pas LEGO (sinon récupéré automatiquement)."
       placeholder: "Corvette"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: collection
+    attributes:
+      label: "Collection (uniquement pour un set LEGO)"
+      description: "Sert à calculer si c'est une bonne affaire (prix moyen à la pièce par gamme). Laisse sur la première option si tu ne sais pas ou si la marque n'est pas LEGO."
+      options:
+        - "Je ne sais pas / laisser la détection automatique essayer"
+        - "Architecture"
+        - "Art"
+        - "The Botanical Collection"
+        - "Creator 3-en-1"
+        - "Disney™"
+        - "Harry Potter™"
+        - "LEGO® Icons"
+        - "Ideas"
+        - "One Piece"
+        - "Speed Champions"
+        - "Star Wars™"
+        - "LEGO® Super Mario™"
+        - "Technic"
+        - "Autre thème (précise-le dans le champ suivant)"
+      default: 0
+    validations:
+      required: false
+
+  - type: input
+    id: collection_autre
+    attributes:
+      label: "Nom de la collection (si 'Autre thème' choisi ci-dessus)"
+      placeholder: "ex: Ninjago"
     validations:
       required: false
 

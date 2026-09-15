@@ -75,7 +75,7 @@ def test_traiter_ajout_set_non_lego_avec_infos_completes(config_vide, monkeypatc
 def test_traiter_ajout_lego_utilise_get_lego_metadata(config_vide, monkeypatch):
     fichier, commentaires = config_vide
     monkeypatch.setattr(psr, "get_lego_metadata", lambda set_id: {
-        "nom": "Corvette", "nb_pieces": "1210", "collection": "Icons",
+        "nom": "Corvette", "nb_pieces": "1210", "collection": "N/A",
         "image_url": "https://lego.com/img.png", "url_lego": "https://lego.com/fr-fr/product/10321",
     })
     champs = {"Marque": "LEGO", "ID_Set (référence unique)": "10321"}
@@ -86,6 +86,54 @@ def test_traiter_ajout_lego_utilise_get_lego_metadata(config_vide, monkeypatch):
     ligne = df[df['ID_Set'] == '10321'].iloc[0]
     assert ligne['Nom_Set'] == 'Corvette'
     assert ligne['Marque'] == 'LEGO'
+
+
+def test_traiter_ajout_lego_priorise_la_collection_choisie_dans_le_formulaire(config_vide, monkeypatch):
+    fichier, commentaires = config_vide
+    # La détection automatique renverrait "N/A" ou une valeur non fiable : le
+    # formulaire doit toujours avoir le dernier mot quand l'utilisateur a choisi.
+    monkeypatch.setattr(psr, "get_lego_metadata", lambda set_id: {
+        "nom": "Corvette", "nb_pieces": "1210", "collection": "N/A",
+        "image_url": "https://lego.com/img.png", "url_lego": "https://lego.com/fr-fr/product/10321",
+    })
+    champs = {
+        "Marque": "LEGO", "ID_Set (référence unique)": "10321",
+        "Collection (uniquement pour un set LEGO)": "Technic",
+    }
+    psr.traiter_ajout(champs)
+    df = pd.read_excel(fichier, dtype=str)
+    assert df[df['ID_Set'] == '10321'].iloc[0]['Collection'] == 'Technic'
+
+
+def test_traiter_ajout_lego_collection_autre_utilise_le_champ_libre(config_vide, monkeypatch):
+    fichier, commentaires = config_vide
+    monkeypatch.setattr(psr, "get_lego_metadata", lambda set_id: {
+        "nom": "Set Ninjago", "nb_pieces": "500", "collection": "N/A",
+        "image_url": "", "url_lego": "https://lego.com/fr-fr/product/10321",
+    })
+    champs = {
+        "Marque": "LEGO", "ID_Set (référence unique)": "10321",
+        "Collection (uniquement pour un set LEGO)": psr.OPTION_COLLECTION_AUTRE,
+        "Nom de la collection (si 'Autre thème' choisi ci-dessus)": "Ninjago",
+    }
+    psr.traiter_ajout(champs)
+    df = pd.read_excel(fichier, dtype=str)
+    assert df[df['ID_Set'] == '10321'].iloc[0]['Collection'] == 'Ninjago'
+
+
+def test_traiter_ajout_lego_auto_retombe_sur_la_valeur_scrapee(config_vide, monkeypatch):
+    fichier, commentaires = config_vide
+    monkeypatch.setattr(psr, "get_lego_metadata", lambda set_id: {
+        "nom": "Corvette", "nb_pieces": "1210", "collection": "Icons",
+        "image_url": "", "url_lego": "https://lego.com/fr-fr/product/10321",
+    })
+    champs = {
+        "Marque": "LEGO", "ID_Set (référence unique)": "10321",
+        "Collection (uniquement pour un set LEGO)": psr.OPTION_COLLECTION_AUTO,
+    }
+    psr.traiter_ajout(champs)
+    df = pd.read_excel(fichier, dtype=str)
+    assert df[df['ID_Set'] == '10321'].iloc[0]['Collection'] == 'Icons'
 
 
 def test_traiter_ajout_id_invalide_est_refuse(config_vide):
