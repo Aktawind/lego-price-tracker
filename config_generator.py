@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import re
+import json
 from bs4 import BeautifulSoup
 import logging
 import glob
@@ -38,6 +39,66 @@ def marque_est_lego(marque):
     """Une marque non renseignée est considérée LEGO par défaut (rétrocompatibilité
     avec les lignes de config créées avant l'ajout de la colonne Marque)."""
     return pd.isna(marque) or str(marque).strip() == '' or str(marque).strip().upper() == 'LEGO'
+
+
+def extraire_collection(soup):
+    """Essaie plusieurs stratégies pour trouver le thème/la collection LEGO d'un
+    set, du plus stable au moins stable (les classes CSS de lego.com changent
+    régulièrement, contrairement aux données structurées et à l'URL des liens).
+    Retourne (collection, methode) où methode est None si rien n'a été trouvé
+    (utile pour logguer un diagnostic exploitable sans avoir accès à la page)."""
+
+    # Plan A : données structurées JSON-LD (schema.org), pensées pour le SEO et
+    # donc en général plus stables que les classes CSS générées par le build JS.
+    try:
+        for script in soup.find_all('script', type='application/ld+json'):
+            try:
+                data = json.loads(script.string or '')
+            except (json.JSONDecodeError, TypeError):
+                continue
+            objets = data if isinstance(data, list) else [data]
+            for objet in objets:
+                if not isinstance(objet, dict):
+                    continue
+                categorie = objet.get('category')
+                if isinstance(categorie, str) and categorie.strip():
+                    return categorie.strip(), 'json-ld:category'
+                marque = objet.get('brand')
+                if isinstance(marque, dict) and marque.get('name') and marque['name'].strip().lower() != 'lego':
+                    return marque['name'].strip(), 'json-ld:brand'
+                if objet.get('@type') == 'BreadcrumbList':
+                    items = objet.get('itemListElement') or []
+                    noms = [i.get('name', '').strip() for i in items if isinstance(i, dict) and i.get('name')]
+                    # Le premier élément est en général "Accueil"/"LEGO.com", le dernier le nom du set :
+                    # le thème est généralement l'avant-dernier.
+                    if len(noms) >= 2:
+                        return noms[-2], 'json-ld:breadcrumb'
+    except Exception:
+        pass
+
+    # Plan B : lien vers la page du thème (l'URL /fr-fr/themes/... est un motif
+    # d'adressage propre à lego.com, indépendant du design de la page).
+    try:
+        lien_theme = soup.select_one('a[href*="/themes/"]')
+        if lien_theme:
+            texte = lien_theme.get_text(strip=True)
+            if texte:
+                return texte, 'lien-theme'
+    except Exception:
+        pass
+
+    # Plan C : ancien sélecteur basé sur les classes CSS (peut se remettre à
+    # marcher si lego.com revient à un nommage proche, ou sur d'autres locales).
+    try:
+        collection_elem = soup.select_one('a[class*="BrandLink"] img')
+        if collection_elem and collection_elem.has_attr('alt'):
+            texte = collection_elem['alt'].strip().replace('Logo', '').strip()
+            if texte:
+                return texte, 'css-brandlink'
+    except Exception:
+        pass
+
+    return 'N/A', None
 
 
 def get_lego_metadata(set_id):
@@ -103,11 +164,20 @@ def get_lego_metadata(set_id):
             logging.warning(f"Impossible de trouver le nombre de pièces pour {set_id} avec toutes les méthodes.")
             
         # --- COLLECTION ---
-        collection = "N/A"
-        collection_elem = soup.select_one('a[class*="BrandLink"] img')
-        if collection_elem and collection_elem.has_attr('alt'):
-            collection = collection_elem['alt'].strip().replace('Logo', '').strip()
-        
+        collection, methode_collection = extraire_collection(soup)
+        if methode_collection:
+            logging.info(f"  -> Collection trouvée via '{methode_collection}'.")
+        else:
+            # Rien n'a marché : on logue de quoi diagnostiquer sans avoir besoin
+            # de rouvrir la page manuellement (les classes CSS de lego.com changent
+            # sans prévenir).
+            titre_page = soup.title.get_text(strip=True) if soup.title else "N/A"
+            liens_theme_proches = [a.get_text(strip=True) for a in soup.select('nav a, [class*="readcrumb"] a')][:8]
+            logging.warning(
+                f"Impossible de déterminer la collection pour {set_id}. "
+                f"Titre de page='{titre_page}', liens de navigation détectés={liens_theme_proches}"
+            )
+
         logging.info(f"Métadonnées récupérées : Nom='{nom_set}', Pièces='{nb_pieces}', Collection='{collection}'")
         return { "nom": nom_set, "image_url": image_url, "nb_pieces": nb_pieces, "collection": collection, "url_lego": url }
         
