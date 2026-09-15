@@ -69,8 +69,10 @@ def envoyer_email_alerte_deals(nouveaux_deals, email_config):
     text_body += f"\n\nConsultez la page des bons plans pour plus d'informations."
     html_body += f'<hr><p>Ces informations proviennent de la page des bons plans. Consultez votre <a href="https://github.com/Aktawind/lego-price-tracker/wiki">tableau de bord</a> pour le suivi des prix de vos sets.</p></body></html>'
 
-    if envoi_email.envoyer(sujet, text_body, html_body, email_config):
+    envoye = envoi_email.envoyer(sujet, text_body, html_body, email_config)
+    if envoye:
         logging.info("Email d'alerte pour les nouveaux bons plans envoyé !")
+    return envoye
 
 def main():
     logging.info("Lancement du chasseur de bons plans...")

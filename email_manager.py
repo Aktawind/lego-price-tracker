@@ -129,5 +129,7 @@ def envoyer_email_recapitulatif(baisses_de_prix, email_config):
     text_body += f"\n\nPour une analyse détaillée, consultez votre tableau de bord : {lien_wiki}"
     html_body += f'<p style="text-align:center; color:#888; font-size:12px;">Consultez le <a href="{lien_wiki}">tableau de bord complet</a>.</p></div></body></html>'
 
-    if envoi_email.envoyer(sujet, text_body, html_body, email_config):
+    envoye = envoi_email.envoyer(sujet, text_body, html_body, email_config)
+    if envoye:
         logging.info(f"Email récapitulatif de {nombre_baisses} baisse(s) envoyé !")
+    return envoye
