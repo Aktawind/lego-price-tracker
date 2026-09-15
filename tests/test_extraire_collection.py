@@ -48,6 +48,27 @@ def test_plan_a_ignores_generic_category():
     assert collection == "N/A"
 
 
+def test_plan_a_ignore_lego_avec_symbole_trademark():
+    # Observé en conditions réelles : lego.com renvoie littéralement "LEGO®"
+    # (avec le symbole ®) plutôt que "LEGO" tout court -- doit être filtré pareil,
+    # tout en gardant intacts les vrais thèmes qui utilisent ce symbole (LEGO® Icons).
+    html = '''<script type="application/ld+json">
+    {"@type": "Product", "category": "LEGO®"}
+    </script>'''
+    collection, methode = extraire_collection(_soup(html))
+    assert methode is None
+    assert collection == "N/A"
+
+
+def test_plan_a_garde_un_vrai_theme_avec_symbole_trademark():
+    html = '''<script type="application/ld+json">
+    {"@type": "Product", "category": "LEGO® Icons"}
+    </script>'''
+    collection, methode = extraire_collection(_soup(html))
+    assert collection == "LEGO® Icons"
+    assert methode == "json-ld:category"
+
+
 def test_plan_a_breadcrumb_sans_theme_est_ignore():
     # Fil d'Ariane à 3 niveaux seulement (Accueil > LEGO > Set) : pas de vrai thème dedans.
     html = '''<script type="application/ld+json">

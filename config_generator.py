@@ -47,8 +47,15 @@ def marque_est_lego(marque):
 VALEURS_COLLECTION_GENERIQUES = {'lego', 'lego.com', 'accueil', 'home', 'shop', 'produits', 'products', 'sets'}
 
 
+def _normaliser_pour_comparaison(texte):
+    """Enlève les symboles ™/®/© et espaces superflus pour comparer une valeur
+    à la liste des génériques, sans altérer le texte réellement stocké (certains
+    vrais thèmes comme "Star Wars™" ou "LEGO® Icons" incluent ces symboles)."""
+    return re.sub(r'[™®©]', '', texte).strip().lower()
+
+
 def _est_collection_utilisable(texte):
-    return bool(texte) and texte.strip().lower() not in VALEURS_COLLECTION_GENERIQUES
+    return bool(texte) and _normaliser_pour_comparaison(texte) not in VALEURS_COLLECTION_GENERIQUES
 
 
 def extraire_collection(soup):
