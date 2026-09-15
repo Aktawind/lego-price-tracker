@@ -1,2 +1,5 @@
 */__pycache__/
 __pycache__/
+.pytest_cache/
+lego_wiki/
+error_*.png

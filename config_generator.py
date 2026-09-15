@@ -11,10 +11,10 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+import historique_db
 
 FICHIER_CONFIG_EXCEL = "config_sets.xlsx"
 FICHIER_LISTE_SETS = "sets_a_analyser.txt"
-FICHIER_HISTORIQUE = "prix_lego.xlsx"
 
 # Dictionnaire pour mapper les domaines aux noms de colonnes dans l'Excel
 DOMAIN_TO_COLUMN_MAP = {
@@ -28,6 +28,18 @@ DOMAIN_TO_COLUMN_MAP = {
     "brickmo.com": "URL_Brickmo"
     # Ajoutez d'autres domaines au besoin
 }
+def champ_manquant(valeur):
+    """Un champ de config est considéré manquant s'il est NaN, vide, ou vaut
+    explicitement 'N/A' (valeur posée quand le scraping Lego.com a échoué)."""
+    return pd.isna(valeur) or str(valeur).strip() in ('', 'N/A', 'nan')
+
+
+def marque_est_lego(marque):
+    """Une marque non renseignée est considérée LEGO par défaut (rétrocompatibilité
+    avec les lignes de config créées avant l'ajout de la colonne Marque)."""
+    return pd.isna(marque) or str(marque).strip() == '' or str(marque).strip().upper() == 'LEGO'
+
+
 def get_lego_metadata(set_id):
     """Scrape Lego.com pour récupérer les métadonnées d'un set en utilisant Selenium."""
     logging.info(f"Récupération des métadonnées pour le set {set_id} sur Lego.com (via Selenium)...")
@@ -174,12 +186,8 @@ def main():
         df_config = df_config[~df_config['ID_Set'].isin(ids_a_supprimer)]
         config_changed = True
         # Nettoyer l'historique
-        try:
-            df_historique = pd.read_excel(FICHIER_HISTORIQUE, dtype=str)
-            df_historique_nettoye = df_historique[~df_historique['ID_Set'].isin(ids_a_supprimer)]
-            df_historique_nettoye.to_excel(FICHIER_HISTORIQUE, index=False)
-            logging.info(f"Historique des prix nettoyé pour les sets supprimés.")
-        except FileNotFoundError: pass
+        historique_db.supprimer_sets(ids_a_supprimer)
+        logging.info(f"Historique des prix nettoyé pour les sets supprimés.")
 
     # Sets à ajouter
     ids_a_ajouter = ids_desires - ids_actuels
@@ -210,20 +218,15 @@ def main():
         if 'Marque' not in df_config.columns:
             df_config['Marque'] = None
 
-        def _champ_manquant(valeur):
-            return pd.isna(valeur) or str(valeur).strip() in ('', 'N/A', 'nan')
-
         for colonne in ('Image_URL', 'Collection', 'nbPieces'):
             if colonne not in df_config.columns:
                 df_config[colonne] = None
 
         ids_a_reparer = []
         for index, row in df_config.iterrows():
-            marque = row.get('Marque')
-            est_lego = pd.isna(marque) or str(marque).strip() == '' or str(marque).strip().upper() == 'LEGO'
-            if not est_lego:
+            if not marque_est_lego(row.get('Marque')):
                 continue
-            if any(_champ_manquant(row.get(c)) for c in ('Image_URL', 'Collection', 'nbPieces')):
+            if any(champ_manquant(row.get(c)) for c in ('Image_URL', 'Collection', 'nbPieces')):
                 ids_a_reparer.append((index, row['ID_Set']))
 
         if ids_a_reparer:
@@ -232,13 +235,13 @@ def main():
                 metadata = get_lego_metadata(set_id)
                 if not metadata:
                     continue
-                if _champ_manquant(df_config.at[index, 'Image_URL']) and metadata.get('image_url'):
+                if champ_manquant(df_config.at[index, 'Image_URL']) and metadata.get('image_url'):
                     df_config.at[index, 'Image_URL'] = metadata['image_url']
                     config_changed = True
-                if _champ_manquant(df_config.at[index, 'Collection']) and metadata.get('collection') not in (None, 'N/A'):
+                if champ_manquant(df_config.at[index, 'Collection']) and metadata.get('collection') not in (None, 'N/A'):
                     df_config.at[index, 'Collection'] = metadata['collection']
                     config_changed = True
-                if _champ_manquant(df_config.at[index, 'nbPieces']) and metadata.get('nb_pieces') not in (None, 'N/A'):
+                if champ_manquant(df_config.at[index, 'nbPieces']) and metadata.get('nb_pieces') not in (None, 'N/A'):
                     df_config.at[index, 'nbPieces'] = metadata['nb_pieces']
                     config_changed = True
 
@@ -259,13 +262,8 @@ def main():
                 logging.info(f"Set {set_id} supprimé via fichier de commande.")
                 config_changed = True
 
-                try:
-                    df_historique = pd.read_excel("prix_lego.xlsx", dtype=str)
-                    df_historique_nettoye = df_historique[df_historique['ID_Set'] != set_id]
-                    df_historique_nettoye.to_excel("prix_lego.xlsx", index=False)
-                    logging.info(f"Historique des prix pour le set {set_id} nettoyé.")
-                except FileNotFoundError:
-                    pass
+                historique_db.supprimer_set(set_id)
+                logging.info(f"Historique des prix pour le set {set_id} nettoyé.")
             else:
                 logging.warning(f"Le set {set_id} à supprimer n'a pas été trouvé.")
         else:

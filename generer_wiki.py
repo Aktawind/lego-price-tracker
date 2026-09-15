@@ -8,6 +8,7 @@ import re
 import logging
 from matplotlib.dates import AutoDateLocator, ConciseDateFormatter
 from config_shared import PRIX_MOYEN_PAR_COLLECTION, SEUIL_BONNE_AFFAIRE, SEUIL_TRES_BONNE_AFFAIRE, construire_slug_wiki
+import historique_db
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,7 +17,6 @@ logging.basicConfig(
 )
 
 # --- CONFIGURATION ---
-FICHIER_PRIX = "prix_lego.xlsx"
 FICHIER_CONFIG = "config_sets.xlsx"
 WIKI_REPO_URL = os.getenv("WIKI_URL", "https://github.com/Aktawind/lego-price-tracker.wiki.git")
 WIKI_LOCAL_PATH = "lego_wiki"
@@ -86,19 +86,11 @@ def generer_graphique(df_set_history, id_set):
 def generer_pages_wiki(df_config):
     logging.info("Début de la génération des pages du Wiki...")
     
-    try:
-        # On s'assure de lire la colonne URL comme du texte
-        df_prix = pd.read_excel(FICHIER_PRIX, dtype={'ID_Set': str, 'URL': str})
-        df_prix['Date'] = pd.to_datetime(df_prix['Date']).dt.normalize()
-    except FileNotFoundError as e:
-        logging.error(f"Erreur: Fichier d'historique '{FICHIER_PRIX}' manquant - {e}")
+    df_prix = historique_db.charger_historique()
+    if df_prix.empty:
+        logging.error("Aucun historique de prix trouvé en base. Génération du wiki annulée.")
         return
-    except KeyError:
-        # Gère le cas où l'ancien fichier Excel n'a pas encore la colonne URL
-        logging.warning("Colonne 'URL' non trouvée dans l'historique. Les liens ne seront pas générés pour cette passe.")
-        df_prix = pd.read_excel(FICHIER_PRIX, dtype={'ID_Set': str})
-        df_prix['Date'] = pd.to_datetime(df_prix['Date']).dt.normalize()
-        df_prix['URL'] = '' # On ajoute une colonne URL vide pour la compatibilité
+    df_prix['Date'] = pd.to_datetime(df_prix['Date']).dt.normalize()
 
     preparer_repo_wiki()
     nettoyer_dossier_wiki(WIKI_LOCAL_PATH)

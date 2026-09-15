@@ -11,7 +11,8 @@ import subprocess
 import pandas as pd
 import requests
 
-from config_generator import get_lego_metadata, FICHIER_CONFIG_EXCEL, FICHIER_HISTORIQUE
+from config_generator import get_lego_metadata, FICHIER_CONFIG_EXCEL
+import historique_db
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
@@ -170,12 +171,7 @@ def traiter_suppression(champs):
     df_config = df_config[df_config['ID_Set'].astype(str) != id_set]
     df_config.to_excel(FICHIER_CONFIG_EXCEL, index=False)
 
-    try:
-        df_historique = pd.read_excel(FICHIER_HISTORIQUE, dtype=str)
-        df_historique = df_historique[df_historique['ID_Set'].astype(str) != id_set]
-        df_historique.to_excel(FICHIER_HISTORIQUE, index=False)
-    except FileNotFoundError:
-        pass
+    historique_db.supprimer_set(id_set)
 
     commenter_issue(f"🗑️ Set `{id_set}` retiré du suivi (configuration et historique nettoyés).")
     return True
@@ -184,7 +180,7 @@ def traiter_suppression(champs):
 def commiter_et_pousser():
     subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=False)
     subprocess.run(["git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"], check=False)
-    subprocess.run(["git", "add", FICHIER_CONFIG_EXCEL, FICHIER_HISTORIQUE], check=False)
+    subprocess.run(["git", "add", FICHIER_CONFIG_EXCEL, historique_db.FICHIER_DB], check=False)
 
     resultat = subprocess.run(["git", "diff", "--cached", "--quiet"])
     if resultat.returncode != 0:

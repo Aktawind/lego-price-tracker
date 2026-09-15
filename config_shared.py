@@ -1,3 +1,5 @@
+import os
+
 # --- ANALYSE DES PRIX ---
 
 # Dictionnaire de connaissance des prix moyens par pièce
@@ -34,6 +36,19 @@ def construire_slug_wiki(id_set, nom_set):
 def construire_url_wiki_set(id_set, nom_set):
     """URL complète de la fiche wiki d'un set donné."""
     return f"{WIKI_URL_PUBLIQUE}/{construire_slug_wiki(id_set, nom_set)}"
+
+# --- CONFIGURATION EMAIL (Resend) ---
+# Commune à tous les scripts qui envoient des emails (catch_lego_price.py, deal_hunter.py).
+
+def charger_config_email():
+    return {
+        "api_key": os.getenv("RESEND_API_KEY"),
+        "expediteur": os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev"),
+        "destinataire": os.getenv("MAIL_DESTINATAIRE"),
+    }
+
+def email_config_complete(email_config):
+    return bool(email_config.get("api_key") and email_config.get("destinataire"))
 
 # Liste des vendeurs à récupérer sur le site Avenue de la Brique
 MAP_VENDEURS = {

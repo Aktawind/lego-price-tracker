@@ -6,7 +6,10 @@ import os
 import logging
 import requests
 import json
-from config_shared import PRIX_MOYEN_PAR_COLLECTION, SEUIL_BONNE_AFFAIRE, SEUIL_TRES_BONNE_AFFAIRE, construire_url_wiki_set
+from config_shared import (
+    PRIX_MOYEN_PAR_COLLECTION, SEUIL_BONNE_AFFAIRE, SEUIL_TRES_BONNE_AFFAIRE,
+    construire_url_wiki_set, charger_config_email, email_config_complete,
+)
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -17,6 +20,7 @@ from selenium_stealth import stealth
 
 import scrapers
 import email_manager
+import historique_db
 
 # --- CONFIGURATION GLOBALE ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
@@ -31,15 +35,10 @@ CONFIG_SITES = {
     "Carrefour": { "type": "carrefour", "selecteur": { "euros": ".product-price__content.c-text--size-m", "centimes": ".product-price__content.c-text--size-s" }, "use_selenium": True },
     # Ajoutez d'autres sites ici au besoin
 }
-FICHIER_EXCEL = "prix_lego.xlsx"
 FICHIER_CONFIG_EXCEL = 'config_sets.xlsx'
 
 # On regroupe la configuration email dans un dictionnaire
-EMAIL_CONFIG = {
-    "adresse": os.getenv('GMAIL_ADDRESS'),
-    "mot_de_passe": os.getenv('GMAIL_APP_PASSWORD'),
-    "destinataire": os.getenv('MAIL_DESTINATAIRE')
-}
+EMAIL_CONFIG = charger_config_email()
 
 # --- FONCTIONS UTILITAIRES ---
 def charger_configuration_sets_df(fichier_config):
@@ -183,10 +182,7 @@ def verifier_les_prix():
     df_config = charger_configuration_sets_df(FICHIER_CONFIG_EXCEL)
     if df_config is None: return
 
-    try:
-        df_historique_precedent = pd.read_excel(FICHIER_EXCEL, dtype={'ID_Set': str})
-    except FileNotFoundError:
-        df_historique_precedent = pd.DataFrame(columns=['Date', 'ID_Set', 'Nom_Set', 'Site', 'Prix', 'URL'])
+    df_historique_precedent = historique_db.charger_historique()
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
@@ -485,14 +481,13 @@ def verifier_les_prix():
     if baisses_de_prix_a_notifier:
         email_manager.envoyer_email_recapitulatif(baisses_de_prix_a_notifier, EMAIL_CONFIG)
         
-    # On sauvegarde l'historique complet, qui inclut les nouveaux prix du jour
-    df_historique_final = pd.concat([df_historique_precedent, df_aujourdhui], ignore_index=True)
-    df_historique_final.to_excel(FICHIER_EXCEL, index=False)
-    logging.info(f"{len(lignes_a_ajouter)} prix enregistrés/mis à jour dans le fichier Excel.")
+    # On n'ajoute que les nouveaux prix du jour : pas besoin de recharger/réécrire
+    # tout l'historique existant comme avec l'ancien fichier Excel.
+    historique_db.ajouter_lignes(lignes_a_ajouter)
 
 # --- POINT D'ENTRÉE ---
 if __name__ == "__main__":
-    if not all(EMAIL_CONFIG.values()):
-        logging.error("Variables d'environnement pour l'email non configurées. Arrêt.")
+    if not email_config_complete(EMAIL_CONFIG):
+        logging.error("Variables d'environnement pour l'email non configurées (RESEND_API_KEY / MAIL_DESTINATAIRE). Arrêt.")
     else:
         verifier_les_prix()

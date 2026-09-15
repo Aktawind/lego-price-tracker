@@ -1,8 +1,7 @@
 # Fichier : email_manager.py
-import smtplib
 import logging
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+
+import envoi_email
 
 COULEUR_RECORD = "#d9534f"
 COULEUR_BONNE_AFFAIRE = "#28a745"
@@ -44,11 +43,6 @@ def envoyer_email_recapitulatif(baisses_de_prix, email_config):
         sujet = f"🏆 {nombre_records} prix jamais vu(s) ! ({nombre_baisses} baisse(s) au total)"
     else:
         sujet = f"Alerte Prix LEGO : {nombre_baisses} baisse(s) de prix détectée(s) !"
-
-    msg = MIMEMultipart('alternative')
-    msg['Subject'] = sujet
-    msg['From'] = email_config['adresse']
-    msg['To'] = email_config['destinataire']
 
     # Version texte (clients mail sans HTML, ou aperçu rapide)
     text_body = "Bonjour,\n\nVoici les baisses de prix détectées aujourd'hui :\n\n"
@@ -135,14 +129,5 @@ def envoyer_email_recapitulatif(baisses_de_prix, email_config):
     text_body += f"\n\nPour une analyse détaillée, consultez votre tableau de bord : {lien_wiki}"
     html_body += f'<p style="text-align:center; color:#888; font-size:12px;">Consultez le <a href="{lien_wiki}">tableau de bord complet</a>.</p></div></body></html>'
 
-    msg.attach(MIMEText(text_body, 'plain'))
-    msg.attach(MIMEText(html_body, 'html'))
-
-    try:
-        with smtplib.SMTP('smtp.gmail.com', 587) as smtp_server:
-            smtp_server.starttls()
-            smtp_server.login(email_config['adresse'], email_config['mot_de_passe'])
-            smtp_server.send_message(msg)
+    if envoi_email.envoyer(sujet, text_body, html_body, email_config):
         logging.info(f"Email récapitulatif de {nombre_baisses} baisse(s) envoyé !")
-    except Exception as e:
-        logging.error(f"Erreur lors de l'envoi de l'email récapitulatif : {e}")

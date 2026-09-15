@@ -17,6 +17,8 @@ jobs:
       # --- ÉTAPE 1 : PRÉPARATION ---
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Setup Chrome
         uses: browser-actions/setup-chrome@v1
@@ -42,15 +44,15 @@ jobs:
       
       - name: Run Deal Hunter (Promotions)
         env:
-          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
           MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE }}
         run: python deal_hunter.py
 
       - name: Run Main Price Tracker
         env:
-          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
           MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE }}
         run: python catch_lego_price.py
 
@@ -62,7 +64,7 @@ jobs:
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
           # On ajoute tous les fichiers de données potentiellement modifiés ou supprimés
-          git add config_sets.xlsx prix_lego.xlsx deals_du_jour.json deals_vus.json *.txt
+          git add config_sets.xlsx prix_lego.db deals_du_jour.json deals_vus.json *.txt
           
           # On commite seulement s'il y a des changements à commiter
           if ! git diff --cached --quiet; then

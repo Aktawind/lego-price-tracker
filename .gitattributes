@@ -1,0 +1,5 @@
+# Fichiers binaires réécrits/modifiés à chaque run automatisé : on les passe par
+# Git LFS pour éviter que le dépôt principal ne gonfle indéfiniment avec des
+# blobs xlsx/sqlite peu compressibles par git.
+*.xlsx filter=lfs diff=lfs merge=lfs -text
+*.db filter=lfs diff=lfs merge=lfs -text
