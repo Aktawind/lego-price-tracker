@@ -44,7 +44,11 @@ def construire_url_wiki_set(id_set, nom_set):
 def charger_config_email():
     return {
         "api_key": os.getenv("RESEND_API_KEY"),
-        "expediteur": os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev"),
+        # `or` plutôt qu'un défaut positionnel à getenv : GitHub Actions règle la
+        # variable d'environnement même quand le secret RESEND_FROM_EMAIL n'existe
+        # pas (juste avec une valeur vide), donc getenv(..., défaut) ne retombe
+        # jamais dessus. Resend rejette un expéditeur vide avec "domain is invalid".
+        "expediteur": os.getenv("RESEND_FROM_EMAIL") or "onboarding@resend.dev",
         "destinataire": os.getenv("MAIL_DESTINATAIRE"),
     }
 
