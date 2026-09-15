@@ -3,11 +3,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 import git
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 import logging
-from matplotlib.dates import DateFormatter
-from config_shared import PRIX_MOYEN_PAR_COLLECTION, SEUIL_BONNE_AFFAIRE, SEUIL_TRES_BONNE_AFFAIRE
+from matplotlib.dates import AutoDateLocator, ConciseDateFormatter
+from config_shared import PRIX_MOYEN_PAR_COLLECTION, SEUIL_BONNE_AFFAIRE, SEUIL_TRES_BONNE_AFFAIRE, construire_slug_wiki
 
 logging.basicConfig(
     level=logging.INFO,
@@ -60,15 +60,16 @@ def generer_graphique(df_set_history, id_set):
     # Utiliser Seaborn pour un joli graphique
     sns.lineplot(data=df_set_history, x='Date', y='Prix', hue='Site', marker='o', ax=ax)
 
-    unique_dates = df_set_history['Date'].unique()
-    ax.set_xticks(unique_dates)
-    date_format = DateFormatter("%d/%m/%Y")
-    ax.xaxis.set_major_formatter(date_format)
+    # On laisse matplotlib choisir intelligemment le nombre de graduations :
+    # avec plus d'un an d'historique quotidien, afficher une graduation par
+    # jour rendait l'axe illisible (un mur de dates superposées).
+    locator = AutoDateLocator(minticks=4, maxticks=10)
+    ax.xaxis.set_major_locator(locator)
+    ax.xaxis.set_major_formatter(ConciseDateFormatter(locator))
 
     ax.set_title(f"Évolution du prix pour le set {id_set}", fontsize=16)
     ax.set_ylabel("Prix (€)")
-    ax.set_xlabel("Date")
-    plt.xticks(rotation=45, ha='right')
+    ax.set_xlabel("")
     plt.tight_layout()
     
     chemin_image = os.path.join(WIKI_LOCAL_PATH, "images", f"graph_{id_set}.png")
@@ -110,7 +111,11 @@ def generer_pages_wiki(df_config):
         nom_set = config_set['Nom_Set']
         image_url = config_set.get('Image_URL', '')
         nb_pieces = pd.to_numeric(config_set.get('nbPieces'), errors='coerce')
-        collection = config_set.get('Collection', 'default')
+        collection_brute = config_set.get('Collection')
+        collection = collection_brute if pd.notna(collection_brute) and str(collection_brute).strip() else None
+        marque = config_set.get('Marque')
+        marque = marque if pd.notna(marque) and str(marque).strip() else 'LEGO'
+        prix_alerte = pd.to_numeric(config_set.get('Prix_Alerte'), errors='coerce')
 
         # On prend TOUT l'historique pour ce set, sans filtrer les sites
         df_set_history = df_prix[df_prix['ID_Set'] == id_set].copy()
@@ -125,16 +130,17 @@ def generer_pages_wiki(df_config):
         meilleur_prix_actuel = dernier_scan_trie['Prix'].min()
         site_meilleur_prix = dernier_scan_trie.iloc[0]['Site']
 
-        # Calculs pour l'analyse de prix
-        prix_moyen_collection = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLLECTION['default'])
-        prix_juste = nb_pieces * prix_moyen_collection if pd.notna(nb_pieces) else None
+        # Calculs pour l'analyse de prix. Le référentiel PRIX_MOYEN_PAR_COLLECTION
+        # ne concerne que les gammes LEGO officielles : pour les autres marques
+        # (Lumibricks, etc.) on n'a pas de "prix juste" fiable, donc on saute ce calcul.
+        est_lego = marque.strip().upper() == 'LEGO'
+        prix_moyen_collection = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLLECTION['default']) if est_lego else None
+        prix_juste = nb_pieces * prix_moyen_collection if (est_lego and pd.notna(nb_pieces) and prix_moyen_collection) else None
         seuil_bonne = prix_juste * SEUIL_BONNE_AFFAIRE if prix_juste else None
         seuil_tres_bonne = prix_juste * SEUIL_TRES_BONNE_AFFAIRE if prix_juste else None
-        
-        # Nettoyage pour éviter que les ":" cassent les liens Wiki
-        nom_pour_url = nom_set.replace(':', '').replace(' ', '-')
-        nom_fichier_page = f"{id_set}-{nom_pour_url}.md"
-        lien_wiki = f"{id_set}-{nom_pour_url}"
+
+        lien_wiki = construire_slug_wiki(id_set, nom_set)
+        nom_fichier_page = f"{lien_wiki}.md"
 
         # --- Page d'accueil ---
         indicateur_deal = ""
@@ -151,16 +157,26 @@ def generer_pages_wiki(df_config):
         # --- Pages de détail ---
         page_detail_content = [f"# {nom_set} ({id_set})"]
         if image_url: page_detail_content.append(f"<img src='{image_url}' alt='Image de {nom_set}' width='400'>\n")
-        
-        if prix_juste:
-            prix_plus_bas_jamais_vu = df_set_history['Prix'].min()
-            page_detail_content.append("## Analyse du Prix")
-            page_detail_content.append(f"- **Collection :** {collection}")
+
+        prix_plus_bas_jamais_vu = df_set_history['Prix'].min()
+        date_limite_6_mois = datetime.now() - timedelta(days=182)
+        historique_6_mois = df_set_history[df_set_history['Date'] >= date_limite_6_mois]
+        prix_plus_bas_6_mois = historique_6_mois['Prix'].min() if not historique_6_mois.empty else prix_plus_bas_jamais_vu
+
+        page_detail_content.append("## Analyse du Prix")
+        if not est_lego:
+            page_detail_content.append(f"- **Marque :** {marque}")
+        page_detail_content.append(f"- **Collection :** {collection if collection else 'Non catégorisée'}")
+        if pd.notna(nb_pieces):
             page_detail_content.append(f"- **Nombre de pièces :** {int(nb_pieces)}")
+        if prix_juste:
             page_detail_content.append(f"- **Prix juste estimé :** {prix_juste:.2f}€ ({prix_moyen_collection:.3f}€/pièce)")
             page_detail_content.append(f"- **Seuil Bonne Affaire :** < {seuil_bonne:.2f}€")
             page_detail_content.append(f"- **Seuil TRÈS Bonne Affaire :** < {seuil_tres_bonne:.2f}€")
-            page_detail_content.append(f"- **Prix le plus bas enregistré :** {prix_plus_bas_jamais_vu:.2f}€\n")
+        if pd.notna(prix_alerte):
+            page_detail_content.append(f"- **Seuil d'alerte configuré :** < {prix_alerte:.2f}€")
+        page_detail_content.append(f"- **Prix le plus bas des 6 derniers mois :** {prix_plus_bas_6_mois:.2f}€")
+        page_detail_content.append(f"- **Prix le plus bas jamais enregistré :** {prix_plus_bas_jamais_vu:.2f}€\n")
 
         page_detail_content.append("## Prix Actuels par Site")
         page_detail_content.append("| Site | Prix Actuel | Prix par Pièce | Analyse |")

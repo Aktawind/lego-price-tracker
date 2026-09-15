@@ -2,13 +2,27 @@ import logging
 import re
 import requests
 from bs4 import BeautifulSoup
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
 
-def scrape(url, headers, selecteur):
+def scrape(url, selecteur, headers=None, driver=None):
+    """Récupère un prix soit via une simple requête HTTP (headers),
+    soit via un navigateur Selenium (driver) quand le site bloque les
+    requêtes non-navigateur (ex: Lego.com renvoie 403 en requests brut)."""
     try:
-        reponse = requests.get(url, headers=headers, verify=False, timeout=10)
-        reponse.raise_for_status()
-        soup = BeautifulSoup(reponse.content, 'html.parser')
-        
+        if driver is not None:
+            driver.get(url)
+            try:
+                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, selecteur)))
+            except Exception:
+                pass  # On tente quand même de parser ce qui a pu charger
+            soup = BeautifulSoup(driver.page_source, 'html.parser')
+        else:
+            reponse = requests.get(url, headers=headers, verify=False, timeout=10)
+            reponse.raise_for_status()
+            soup = BeautifulSoup(reponse.content, 'html.parser')
+
         element_prix = soup.select_one(selecteur)
         if not element_prix:
             logging.warning(f"Sélecteur '{selecteur}' non trouvé sur {url}")

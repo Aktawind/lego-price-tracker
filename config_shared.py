@@ -23,6 +23,18 @@ SEUIL_TRES_BONNE_AFFAIRE = 0.70  # 30% de réduction ou plus (prix <= 70% du pri
 SEUIL_BONNE_AFFAIRE = 0.80      # Entre 20% et 29% de réduction (prix <= 80% du prix juste)
 # Tout ce qui est au-dessus du prix juste est considéré comme une "mauvaise affaire"
 
+WIKI_URL_PUBLIQUE = "https://github.com/Aktawind/lego-price-tracker/wiki"
+
+def construire_slug_wiki(id_set, nom_set):
+    """Construit le slug de page wiki utilisé par generer_wiki.py, pour pouvoir
+    pointer directement vers la fiche d'un set (et pas juste la page d'accueil)."""
+    nom_pour_url = str(nom_set).replace(':', '').replace(' ', '-')
+    return f"{id_set}-{nom_pour_url}"
+
+def construire_url_wiki_set(id_set, nom_set):
+    """URL complète de la fiche wiki d'un set donné."""
+    return f"{WIKI_URL_PUBLIQUE}/{construire_slug_wiki(id_set, nom_set)}"
+
 # Liste des vendeurs à récupérer sur le site Avenue de la Brique
 MAP_VENDEURS = {
     "chez amazon": "Amazon",

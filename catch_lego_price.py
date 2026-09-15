@@ -1,12 +1,12 @@
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 import urllib3
 import os
 import logging
 import requests
 import json
-from config_shared import PRIX_MOYEN_PAR_COLLECTION, SEUIL_BONNE_AFFAIRE, SEUIL_TRES_BONNE_AFFAIRE
+from config_shared import PRIX_MOYEN_PAR_COLLECTION, SEUIL_BONNE_AFFAIRE, SEUIL_TRES_BONNE_AFFAIRE, construire_url_wiki_set
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -23,7 +23,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_SITES = {
     "Amazon": { "type": "amazon", "use_selenium": True },
-    "Lego": { "type": "standard", "selecteur": '[data-test="product-price"]', "use_selenium": False },
+    # Lego.com bloque les requêtes HTTP "brutes" (403 Forbidden) : on passe par un
+    # vrai navigateur Selenium, comme pour les autres sites protégés par un anti-bot.
+    "Lego": { "type": "standard", "selecteur": '[data-test="product-price"]', "use_selenium": True },
     "Auchan": { "type": "standard", "selecteur": ".product-price", "use_selenium": False },
     "Leclerc": { "type": "standard", "selecteur": ".egToM .visually-hidden", "use_selenium": False },
     "Carrefour": { "type": "carrefour", "selecteur": { "euros": ".product-price__content.c-text--size-m", "centimes": ".product-price__content.c-text--size-s" }, "use_selenium": True },
@@ -93,7 +95,9 @@ def creer_driver_selenium(scraper_type="standard"):
 
     # --- Application conditionnelle du mode Stealth ---
     # Mettez ici la liste de tous les types de scrapers qui nécessitent le camouflage
-    types_furtifs = ["fnac", "carrefour", "kingjouet"] # Ajoutez/retirez des types au besoin
+    # "standard" est inclus car c'est le type utilisé pour le scraping direct de
+    # Lego.com, qui bloque les navigateurs non "furtifs" avec un 403.
+    types_furtifs = ["fnac", "carrefour", "kingjouet", "standard"] # Ajoutez/retirez des types au besoin
 
     if scraper_type in types_furtifs:
         logging.info("  -> Activation du mode Stealth pour ce scraper.")
@@ -106,6 +110,39 @@ def creer_driver_selenium(scraper_type="standard"):
                 fix_hairline=True)
                 
     return driver
+
+def analyser_record_prix(df_set_historique_precedent, nouveau_prix, fenetre_recente_jours=182):
+    """Compare le nouveau prix à tout l'historique connu (pas juste le dernier prix
+    par site) pour dire si c'est un prix jamais vu, ou le plus bas depuis N mois.
+    Retourne (message_lisible, est_record_absolu, est_record_recent)."""
+    if df_set_historique_precedent.empty:
+        return None, False, False
+
+    prix_min_absolu = df_set_historique_precedent['Prix'].min()
+    est_record_absolu = nouveau_prix <= prix_min_absolu
+
+    date_limite = datetime.now() - timedelta(days=fenetre_recente_jours)
+    dates_historique = pd.to_datetime(df_set_historique_precedent['Date'], errors='coerce')
+    df_recent = df_set_historique_precedent[dates_historique >= date_limite]
+    prix_min_recent = df_recent['Prix'].min() if not df_recent.empty else prix_min_absolu
+    est_record_recent = nouveau_prix <= prix_min_recent
+
+    mois = round(fenetre_recente_jours / 30.4)
+    if est_record_absolu:
+        return f"🏆 Prix le plus bas jamais enregistré pour ce set, il n'a jamais été aussi bas !", True, True
+    elif est_record_recent:
+        return f"📉 Plus bas prix des {mois} derniers mois !", False, True
+    return None, False, False
+
+def driver_est_vivant(driver):
+    """Vérifie qu'une session Selenium est toujours utilisable (le driver peut
+    planter en cours de route sur un runner CI, sans forcément lever d'exception
+    visible côté scraper individuel)."""
+    try:
+        _ = driver.current_url
+        return True
+    except Exception:
+        return False
 
 def obtenir_localisation_ip():
     """
@@ -278,20 +315,35 @@ def verifier_les_prix():
 
         for tache in taches_a_faire:
             logging.info(f"Vérification de '{tache['nom_set']}'...")
-            
+
             url_propre = tache['url'].strip().rstrip(':/')
-            
+
+            # Si la session Selenium a planté (crash du navigateur), on la
+            # recrée avant de continuer plutôt que de laisser échouer silencieusement
+            # toutes les tâches restantes pour ce site.
+            if driver is not None and not driver_est_vivant(driver):
+                logging.warning(f"Session Selenium invalide détectée pour {site}, redémarrage du driver...")
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
+                try:
+                    driver = creer_driver_selenium(scraper_type)
+                except Exception as e:
+                    logging.error(f"Impossible de recréer le driver Selenium pour {site}: {e}")
+                    driver = None
+
             try:
                 kwargs = {'url': url_propre}
                 if driver: kwargs['driver'] = driver
                 else: kwargs['headers'] = headers
-                
+
                 if 'selecteur' in tache and tache['selecteur']:
                     if isinstance(tache['selecteur'], dict):
                         kwargs.update(tache['selecteur'])
                     else:
                         kwargs['selecteur'] = tache['selecteur']
-                
+
                 prix_actuel = scraper_function(**kwargs)
             except Exception as e:
                 logging.error(f"Erreur inattendue lors de l'appel du scraper pour {url_propre}: {e}")
@@ -354,23 +406,40 @@ def verifier_les_prix():
         
         # === LA CONDITION D'ALERTE FINALE ===
         if meilleur_prix_aujourdhui < meilleur_prix_precedent:
-            logging.info(f"🏆 Baisse du meilleur prix marché pour le set {set_id} ! Nouveau meilleur prix: {meilleur_prix_aujourdhui}€ (précédent: {meilleur_prix_precedent}€)")
-            
             # On prépare les données pour l'email
             nom_set = meilleure_offre_aujourdhui['Nom_Set']
             site_offre = meilleure_offre_aujourdhui['Site']
             url_offre = meilleure_offre_aujourdhui.get('URL', '#')
-            
-            # On exécute l'analyse "bonne affaire"
+
+            # On exécute l'analyse "bonne affaire" + on récupère les infos de config du set
             analyse_affaire = "standard"
             image_url = ''
+            nb_pieces = None
+            marque = 'LEGO'
+            prix_alerte = None
             try:
                 config_set_row = df_config.loc[df_config['ID_Set'] == set_id].iloc[0]
                 nb_pieces = pd.to_numeric(config_set_row.get('nbPieces'), errors='coerce')
-                collection = config_set_row.get('Collection', 'default')
+                collection_brute = config_set_row.get('Collection')
+                collection = collection_brute if pd.notna(collection_brute) and str(collection_brute).strip() else None
                 image_url = config_set_row.get('Image_URL', '')
-                
-                if pd.notna(nb_pieces):
+                marque_brute = config_set_row.get('Marque')
+                marque = marque_brute if pd.notna(marque_brute) and str(marque_brute).strip() else 'LEGO'
+                prix_alerte = pd.to_numeric(config_set_row.get('Prix_Alerte'), errors='coerce')
+                if pd.isna(prix_alerte):
+                    prix_alerte = None
+
+                # On préfère toujours l'URL officielle/manuelle renseignée dans la config
+                # (page produit stable) plutôt que le lien de redirection "go/px" d'Avenue
+                # de la Brique, qui expire ou devient invalide avec le temps.
+                colonne_url_config = f"URL_{site_offre.replace('.', '_').replace(' ', '_')}"
+                url_manuelle = config_set_row.get(colonne_url_config)
+                if pd.notna(url_manuelle) and str(url_manuelle).strip():
+                    url_offre = str(url_manuelle).strip()
+
+                # Le référentiel de prix moyen au pièce ne vaut que pour les gammes LEGO
+                # officielles ; on ne calcule pas de "bonne affaire" pour les autres marques.
+                if marque.strip().upper() == 'LEGO' and pd.notna(nb_pieces):
                     prix_moyen = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLLECTION['default'])
                     prix_juste = nb_pieces * prix_moyen
                     if meilleur_prix_aujourdhui <= prix_juste * SEUIL_TRES_BONNE_AFFAIRE:
@@ -380,7 +449,22 @@ def verifier_les_prix():
             except IndexError:
                 logging.warning(f"Infos de config manquantes pour le set {set_id} pour l'analyse.")
 
+            # --- On ne notifie que si la baisse est "intéressante" ---
+            # Si un prix cible a été défini pour ce set, on n'alerte que si le nouveau
+            # prix passe sous ce seuil (ex: la Corvette qui passe de 50€ à 49€ n'a pas
+            # d'intérêt si le seuil configuré est 45€).
+            if prix_alerte is not None and meilleur_prix_aujourdhui > prix_alerte:
+                logging.info(f"Baisse détectée pour le set {set_id} ({meilleur_prix_aujourdhui}€) mais au-dessus du seuil d'alerte configuré ({prix_alerte}€). Pas de notification.")
+                continue
+
+            # --- Vraie analyse historique : est-ce un prix jamais vu / du jamais vu depuis longtemps ? ---
+            contexte_record, est_record_absolu, est_record_6_mois = analyser_record_prix(
+                df_set_historique_precedent, meilleur_prix_aujourdhui
+            )
+            logging.info(f"🏆 Baisse du meilleur prix marché pour le set {set_id} ! Nouveau meilleur prix: {meilleur_prix_aujourdhui}€ (précédent: {meilleur_prix_precedent}€). {contexte_record or ''}")
+
             baisses_de_prix_a_notifier.append({
+                'id_set': set_id,
                 'nom_set': nom_set,
                 'nouveau_prix': meilleur_prix_aujourdhui,
                 'prix_precedent': meilleur_prix_precedent,
@@ -388,7 +472,11 @@ def verifier_les_prix():
                 'url': url_offre,
                 'image_url': image_url,
                 'analyse_affaire': analyse_affaire,
-                'est_un_record': True # On peut utiliser cette clé pour un message spécial
+                'nb_pieces': nb_pieces if pd.notna(nb_pieces) else None,
+                'contexte_record': contexte_record,
+                'est_record_absolu': est_record_absolu,
+                'est_record_6_mois': est_record_6_mois,
+                'url_wiki': construire_url_wiki_set(set_id, nom_set),
             })
         else:
             logging.info(f"Meilleur prix pour le set {set_id} n'a pas baissé (Actuel: {meilleur_prix_aujourdhui}€ vs Précédent: {meilleur_prix_precedent}€).")

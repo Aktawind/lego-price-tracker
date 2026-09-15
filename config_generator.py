@@ -127,6 +127,7 @@ def process_set_file(file_path):
         "nbPieces": metadata['nb_pieces'],
         "Collection": metadata['collection'],
         "Image_URL": metadata['image_url'],
+        "Marque": "LEGO",
     }
     
     # Ajouter l'URL de Lego.com à la liste
@@ -191,7 +192,7 @@ def main():
                 nouvelle_ligne = {
                     "ID_Set": set_id, "Nom_Set": metadata['nom'], "nbPieces": metadata['nb_pieces'],
                     "Collection": metadata['collection'], "Image_URL": metadata['image_url'],
-                    "URL_Lego": metadata['url_lego']
+                    "URL_Lego": metadata['url_lego'], "Marque": "LEGO"
                 }
                 nouvelles_lignes.append(nouvelle_ligne)
         
@@ -199,6 +200,47 @@ def main():
             nouvelles_lignes_df = pd.DataFrame(nouvelles_lignes)
             df_config = pd.concat([df_config, nouvelles_lignes_df], ignore_index=True)
             config_changed = True
+
+    # --- ÉTAPE 2bis : AUTO-RÉPARATION DES MÉTADONNÉES MANQUANTES ---
+    # Un set déjà présent dans la config n'était jamais revisité, même si sa
+    # récupération initiale avait échoué partiellement (image, collection ou
+    # nombre de pièces manquants). On retente pour ces sets LEGO uniquement
+    # (les autres marques n'ont pas de fiche Lego.com à scraper).
+    if 'ID_Set' in df_config.columns and not df_config.empty:
+        if 'Marque' not in df_config.columns:
+            df_config['Marque'] = None
+
+        def _champ_manquant(valeur):
+            return pd.isna(valeur) or str(valeur).strip() in ('', 'N/A', 'nan')
+
+        for colonne in ('Image_URL', 'Collection', 'nbPieces'):
+            if colonne not in df_config.columns:
+                df_config[colonne] = None
+
+        ids_a_reparer = []
+        for index, row in df_config.iterrows():
+            marque = row.get('Marque')
+            est_lego = pd.isna(marque) or str(marque).strip() == '' or str(marque).strip().upper() == 'LEGO'
+            if not est_lego:
+                continue
+            if any(_champ_manquant(row.get(c)) for c in ('Image_URL', 'Collection', 'nbPieces')):
+                ids_a_reparer.append((index, row['ID_Set']))
+
+        if ids_a_reparer:
+            logging.info(f"Métadonnées incomplètes détectées pour {len(ids_a_reparer)} set(s), nouvelle tentative de récupération...")
+            for index, set_id in ids_a_reparer:
+                metadata = get_lego_metadata(set_id)
+                if not metadata:
+                    continue
+                if _champ_manquant(df_config.at[index, 'Image_URL']) and metadata.get('image_url'):
+                    df_config.at[index, 'Image_URL'] = metadata['image_url']
+                    config_changed = True
+                if _champ_manquant(df_config.at[index, 'Collection']) and metadata.get('collection') not in (None, 'N/A'):
+                    df_config.at[index, 'Collection'] = metadata['collection']
+                    config_changed = True
+                if _champ_manquant(df_config.at[index, 'nbPieces']) and metadata.get('nb_pieces') not in (None, 'N/A'):
+                    df_config.at[index, 'nbPieces'] = metadata['nb_pieces']
+                    config_changed = True
 
     # --- ÉTAPE 3 : GESTION DES FICHIERS DE COMMANDE INDIVIDUELS (EN PRIORITÉ) ---
     fichiers_commandes = [f for f in os.listdir() if not f.startswith('.') and os.path.splitext(os.path.basename(f))[0].isdigit()]
