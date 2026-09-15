@@ -64,7 +64,7 @@ jobs:
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
           # On ajoute tous les fichiers de données potentiellement modifiés ou supprimés
-          git add config_sets.xlsx prix_lego.db deals_du_jour.json deals_vus.json *.txt
+          git add config_sets.xlsx prix_lego.db deals_du_jour.json deals_vus.json sets_a_analyser.txt
           
           # On commite seulement s'il y a des changements à commiter
           if ! git diff --cached --quiet; then
