@@ -38,22 +38,21 @@ def construire_url_wiki_set(id_set, nom_set):
     """URL complète de la fiche wiki d'un set donné."""
     return f"{WIKI_URL_PUBLIQUE}/{construire_slug_wiki(id_set, nom_set)}"
 
-# --- CONFIGURATION EMAIL (Resend) ---
+# --- CONFIGURATION EMAIL (Brevo) ---
 # Commune à tous les scripts qui envoient des emails (catch_lego_price.py, deal_hunter.py).
+# Contrairement à Resend, Brevo n'offre pas d'expéditeur "bac à sable" partagé :
+# il faut toujours un expéditeur vérifié (BREVO_FROM_EMAIL), pas de valeur par
+# défaut possible.
 
 def charger_config_email():
     return {
-        "api_key": os.getenv("RESEND_API_KEY"),
-        # `or` plutôt qu'un défaut positionnel à getenv : GitHub Actions règle la
-        # variable d'environnement même quand le secret RESEND_FROM_EMAIL n'existe
-        # pas (juste avec une valeur vide), donc getenv(..., défaut) ne retombe
-        # jamais dessus. Resend rejette un expéditeur vide avec "domain is invalid".
-        "expediteur": os.getenv("RESEND_FROM_EMAIL") or "onboarding@resend.dev",
+        "api_key": os.getenv("BREVO_API_KEY"),
+        "expediteur": os.getenv("BREVO_FROM_EMAIL") or None,
         "destinataire": os.getenv("MAIL_DESTINATAIRE"),
     }
 
 def email_config_complete(email_config):
-    return bool(email_config.get("api_key") and email_config.get("destinataire"))
+    return bool(email_config.get("api_key") and email_config.get("expediteur") and email_config.get("destinataire"))
 
 # Liste des vendeurs à récupérer sur le site Avenue de la Brique
 MAP_VENDEURS = {

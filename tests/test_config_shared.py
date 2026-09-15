@@ -16,9 +16,10 @@ def test_construire_url_wiki_set_pointe_vers_la_bonne_page():
 
 
 def test_email_config_complete():
-    assert email_config_complete({"api_key": "abc", "destinataire": "a@a.com"}) is True
-    assert email_config_complete({"api_key": None, "destinataire": "a@a.com"}) is False
-    assert email_config_complete({"api_key": "abc", "destinataire": None}) is False
+    assert email_config_complete({"api_key": "abc", "expediteur": "x@x.com", "destinataire": "a@a.com"}) is True
+    assert email_config_complete({"api_key": None, "expediteur": "x@x.com", "destinataire": "a@a.com"}) is False
+    assert email_config_complete({"api_key": "abc", "expediteur": None, "destinataire": "a@a.com"}) is False
+    assert email_config_complete({"api_key": "abc", "expediteur": "x@x.com", "destinataire": None}) is False
     assert email_config_complete({}) is False
 
 
@@ -29,19 +30,20 @@ def test_prix_moyen_par_collection_valeurs_connues():
     assert PRIX_MOYEN_PAR_COLLECTION['LEGO® Education'] == 0.100
 
 
-def test_charger_config_email_expediteur_par_defaut_si_absent(monkeypatch):
-    monkeypatch.delenv("RESEND_FROM_EMAIL", raising=False)
-    assert charger_config_email()["expediteur"] == "onboarding@resend.dev"
+def test_charger_config_email_expediteur_absent_si_pas_configure(monkeypatch):
+    # Contrairement à Resend, Brevo n'a pas d'expéditeur "bac à sable" par défaut :
+    # sans BREVO_FROM_EMAIL, l'expéditeur doit rester vide (pas de valeur inventée).
+    monkeypatch.delenv("BREVO_FROM_EMAIL", raising=False)
+    assert charger_config_email()["expediteur"] is None
 
 
-def test_charger_config_email_expediteur_par_defaut_si_vide(monkeypatch):
-    # GitHub Actions règle la variable d'environnement même quand le secret
-    # n'existe pas, mais avec une valeur vide plutôt qu'absente -- il ne faut
-    # pas envoyer un email avec un expéditeur vide (Resend le rejette en 422).
-    monkeypatch.setenv("RESEND_FROM_EMAIL", "")
-    assert charger_config_email()["expediteur"] == "onboarding@resend.dev"
+def test_charger_config_email_expediteur_vide_traite_comme_absent(monkeypatch):
+    # Même piège que pour Resend : GitHub Actions règle la variable même quand
+    # le secret n'existe pas côté repo, mais avec une valeur vide.
+    monkeypatch.setenv("BREVO_FROM_EMAIL", "")
+    assert charger_config_email()["expediteur"] is None
 
 
 def test_charger_config_email_expediteur_personnalise(monkeypatch):
-    monkeypatch.setenv("RESEND_FROM_EMAIL", "alertes@mondomaine.fr")
+    monkeypatch.setenv("BREVO_FROM_EMAIL", "alertes@mondomaine.fr")
     assert charger_config_email()["expediteur"] == "alertes@mondomaine.fr"

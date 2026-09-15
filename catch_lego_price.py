@@ -488,6 +488,6 @@ def verifier_les_prix():
 # --- POINT D'ENTRÉE ---
 if __name__ == "__main__":
     if not email_config_complete(EMAIL_CONFIG):
-        logging.error("Variables d'environnement pour l'email non configurées (RESEND_API_KEY / MAIL_DESTINATAIRE). Arrêt.")
+        logging.error("Variables d'environnement pour l'email non configurées (BREVO_API_KEY / BREVO_FROM_EMAIL / MAIL_DESTINATAIRE). Arrêt.")
     else:
         verifier_les_prix()

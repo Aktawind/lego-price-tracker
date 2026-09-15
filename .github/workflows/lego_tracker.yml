@@ -44,15 +44,15 @@ jobs:
       
       - name: Run Deal Hunter (Promotions)
         env:
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          BREVO_FROM_EMAIL: ${{ secrets.BREVO_FROM_EMAIL }}
           MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE }}
         run: python deal_hunter.py
 
       - name: Run Main Price Tracker
         env:
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          BREVO_FROM_EMAIL: ${{ secrets.BREVO_FROM_EMAIL }}
           MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE }}
         run: python catch_lego_price.py
 
