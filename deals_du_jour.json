@@ -3,7 +3,7 @@
         {
             "site": "Cdiscount",
             "url": "https://www.avenuedelabrique.com/go/px/86619",
-            "prix": 144.99
+            "prix": 159.99
         },
         {
             "site": "Carrefour",
@@ -72,7 +72,7 @@
         {
             "site": "KidInn",
             "url": "https://www.avenuedelabrique.com/go/px/146242",
-            "prix": 431.99
+            "prix": 430.99
         }
     ],
     "10370": [
@@ -87,14 +87,14 @@
             "prix": 49.99
         },
         {
-            "site": "Carrefour",
-            "url": "https://www.avenuedelabrique.com/go/px/130594",
-            "prix": 62.84
-        },
-        {
             "site": "Cdiscount",
             "url": "https://www.avenuedelabrique.com/go/px/115565",
-            "prix": 66.2
+            "prix": 60.31
+        },
+        {
+            "site": "Carrefour",
+            "url": "https://www.avenuedelabrique.com/go/px/130594",
+            "prix": 67.93
         }
     ],
     "10372": [
@@ -116,19 +116,19 @@
         {
             "site": "KidInn",
             "url": "https://www.avenuedelabrique.com/go/px/140814",
-            "prix": 83.49
+            "prix": 82.99
         },
         {
             "site": "Cdiscount",
             "url": "https://www.avenuedelabrique.com/go/px/127075",
-            "prix": 84.98
+            "prix": 101.26
         }
     ],
     "11370": [
         {
             "site": "Cdiscount",
             "url": "https://www.avenuedelabrique.com/go/px/135515",
-            "prix": 204.99
+            "prix": 219.99
         },
         {
             "site": "Lego",
@@ -160,7 +160,7 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/136763",
-            "prix": 115.03
+            "prix": 115.02
         },
         {
             "site": "Auchan",
@@ -200,13 +200,13 @@
     ],
     "11383": [
         {
-            "site": "Leclerc",
-            "url": "https://www.avenuedelabrique.com/go/px/151020",
-            "prix": 94.99
-        },
-        {
             "site": "Cdiscount",
             "url": "https://www.avenuedelabrique.com/go/px/146598",
+            "prix": 99.0
+        },
+        {
+            "site": "Leclerc",
+            "url": "https://www.avenuedelabrique.com/go/px/151020",
             "prix": 99.0
         },
         {
@@ -222,7 +222,7 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/148694",
-            "prix": 103.68
+            "prix": 103.66
         },
         {
             "site": "Lego",
@@ -276,15 +276,20 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/129529",
-            "prix": 231.91
+            "prix": 231.9
         },
         {
             "site": "Cdiscount",
             "url": "https://www.avenuedelabrique.com/go/px/135133",
-            "prix": 234.99
+            "prix": 249.99
         }
     ],
     "42232": [
+        {
+            "site": "Cdiscount",
+            "url": "https://www.avenuedelabrique.com/go/px/146552",
+            "prix": 358.9
+        },
         {
             "site": "Leclerc",
             "url": "https://www.avenuedelabrique.com/go/px/151102",
@@ -294,11 +299,6 @@
             "site": "Amazon",
             "url": "https://www.avenuedelabrique.com/go/px/142986",
             "prix": 358.9
-        },
-        {
-            "site": "Cdiscount",
-            "url": "https://www.avenuedelabrique.com/go/px/146552",
-            "prix": 374.99
         },
         {
             "site": "Carrefour",
@@ -313,7 +313,7 @@
         {
             "site": "KidInn",
             "url": "https://www.avenuedelabrique.com/go/px/150933",
-            "prix": 430.99
+            "prix": 430.49
         },
         {
             "site": "Lego",
@@ -359,7 +359,7 @@
         {
             "site": "Cdiscount",
             "url": "https://www.avenuedelabrique.com/go/px/148682",
-            "prix": 117.9
+            "prix": 133.25
         }
     ]
 }
