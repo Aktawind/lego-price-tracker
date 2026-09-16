@@ -110,6 +110,14 @@ def creer_driver_selenium(scraper_type="standard"):
                 
     return driver
 
+def notification_autorisee_par_seuil(nouveau_prix, prix_alerte):
+    """Une baisse n'est notifiée que si aucun seuil n'est configuré pour ce
+    set, ou si le nouveau prix passe sous ce seuil. Permet d'ignorer les
+    micro-baisses sans intérêt (ex: 50€ -> 49€) quand un prix cible a été
+    défini (colonne Prix_Alerte)."""
+    return prix_alerte is None or nouveau_prix <= prix_alerte
+
+
 def analyser_record_prix(df_set_historique_precedent, nouveau_prix, fenetre_recente_jours=182):
     """Compare le nouveau prix à tout l'historique connu (pas juste le dernier prix
     par site) pour dire si c'est un prix jamais vu, ou le plus bas depuis N mois.
@@ -449,7 +457,7 @@ def verifier_les_prix():
             # Si un prix cible a été défini pour ce set, on n'alerte que si le nouveau
             # prix passe sous ce seuil (ex: la Corvette qui passe de 50€ à 49€ n'a pas
             # d'intérêt si le seuil configuré est 45€).
-            if prix_alerte is not None and meilleur_prix_aujourdhui > prix_alerte:
+            if not notification_autorisee_par_seuil(meilleur_prix_aujourdhui, prix_alerte):
                 logging.info(f"Baisse détectée pour le set {set_id} ({meilleur_prix_aujourdhui}€) mais au-dessus du seuil d'alerte configuré ({prix_alerte}€). Pas de notification.")
                 continue
 
