@@ -1,19 +1,38 @@
-name: "🗑️ Retirer un set du suivi"
-description: "Retire un set (acheté, plus suivi, etc.) du suivi de prix et nettoie son historique."
-title: "[Suppression] "
-labels: ["suppression-set"]
+name: 🗑️ Retirer un set du suivi
+description: Retire un set (acheté, plus suivi, etc.) du suivi de prix et nettoie son historique.
+title: '[Suppression] '
+labels:
+- suppression-set
 body:
-  - type: markdown
-    attributes:
-      value: |
-        Le set sera retiré de la configuration et son historique de prix sera supprimé.
-        Il n'apparaîtra plus dans le wiki ni dans les rapports.
+- type: markdown
+  attributes:
+    value: 'Le set sera retiré de la configuration et son historique de prix sera supprimé.
 
-  - type: input
-    id: id_set
-    attributes:
-      label: "ID_Set à retirer"
-      description: "L'identifiant exact tel qu'il apparaît dans le suivi (ex: 10321)."
-      placeholder: "10321"
-    validations:
-      required: true
+      Il n''apparaîtra plus dans le wiki ni dans les rapports.
+
+      '
+- type: dropdown
+  id: id_set
+  attributes:
+    label: Set à retirer
+    description: Liste régénérée automatiquement à chaque changement de config.
+    options:
+    - 10300 — La machine à remonter le temps de Retour vers le futur
+    - 10321 — Corvette
+    - 10339 — Le bureau de poste du Père Noël
+    - 10361 — Le train de Noël
+    - 10365 — Le bateau pirate du capitaine Jack Sparrow
+    - 10370 — L’étoile de Noël
+    - 10372 — Hibiscus
+    - '11370 — Stranger Things : la Maison Creel'
+    - 11376 — Ford Model T
+    - 11383 — Le manoir du maire
+    - 21338 — La maison en A
+    - 21351 — L'Étrange Noël de Monsieur Jack - Disney Tim Burton
+    - 42232 — Megacar Sadair's Spear de Koenigsegg
+    - 45200 — Kit de science Mission lunaire
+    - 45201 — Kit de science Animaux de l’Antarctique
+    - 80121 — L’auberge traditionnelle du clair de lune
+    - LUMI-LUNA — Luna Cottage
+  validations:
+    required: true

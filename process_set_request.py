@@ -13,6 +13,7 @@ import requests
 
 from config_generator import get_lego_metadata, FICHIER_CONFIG_EXCEL
 import historique_db
+from generer_formulaires import mettre_a_jour_dropdowns_sets, extraire_id_set, FORMULAIRES
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
@@ -188,7 +189,7 @@ def traiter_modification(champs):
         if col not in df_config.columns:
             df_config[col] = None
 
-    id_set = (champs.get("ID_Set à modifier") or "").strip()
+    id_set = extraire_id_set(champs.get("Set à modifier"))
     if 'ID_Set' not in df_config.columns or id_set not in df_config['ID_Set'].astype(str).values:
         commenter_issue(f"⚠️ Le set `{id_set}` n'a pas été trouvé dans le suivi, aucune action effectuée.")
         return False
@@ -243,7 +244,7 @@ def traiter_modification(champs):
 
 def traiter_suppression(champs):
     df_config = charger_config()
-    id_set = (champs.get("ID_Set à retirer") or "").strip()
+    id_set = extraire_id_set(champs.get("Set à retirer"))
 
     if 'ID_Set' not in df_config.columns or id_set not in df_config['ID_Set'].astype(str).values:
         commenter_issue(f"⚠️ Le set `{id_set}` n'a pas été trouvé dans le suivi, aucune action effectuée.")
@@ -259,9 +260,12 @@ def traiter_suppression(champs):
 
 
 def commiter_et_pousser():
+    mettre_a_jour_dropdowns_sets()
+
     subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=False)
     subprocess.run(["git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"], check=False)
-    subprocess.run(["git", "add", FICHIER_CONFIG_EXCEL, historique_db.FICHIER_DB], check=False)
+    chemins_formulaires = [chemin for chemin, _ in FORMULAIRES]
+    subprocess.run(["git", "add", FICHIER_CONFIG_EXCEL, historique_db.FICHIER_DB, *chemins_formulaires], check=False)
 
     resultat = subprocess.run(["git", "diff", "--cached", "--quiet"])
     if resultat.returncode != 0:

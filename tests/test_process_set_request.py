@@ -159,7 +159,7 @@ def test_traiter_suppression(config_vide):
     df.to_excel(fichier, index=False)
     hdb.ajouter_lignes([{'Date': '2026-01-01 10:00:00', 'ID_Set': '10321', 'Nom_Set': 'Corvette', 'Site': 'Lego', 'Prix': 1.0, 'URL': ''}])
 
-    resultat = psr.traiter_suppression({"ID_Set à retirer": "10321"})
+    resultat = psr.traiter_suppression({"Set à retirer": "10321 — Corvette"})
     assert resultat is True
 
     df_apres = pd.read_excel(fichier, dtype=str)
@@ -170,7 +170,7 @@ def test_traiter_suppression(config_vide):
 
 def test_traiter_modification_set_inconnu(config_vide):
     fichier, commentaires = config_vide
-    resultat = psr.traiter_modification({"ID_Set à modifier": "99999"})
+    resultat = psr.traiter_modification({"Set à modifier": "99999"})
     assert resultat is False
     assert any("n'a pas été trouvé" in c for c in commentaires)
 
@@ -180,7 +180,7 @@ def test_traiter_modification_rien_a_changer(config_vide):
     df = pd.DataFrame([{"ID_Set": "10321", "Nom_Set": "Corvette"}])
     df.to_excel(fichier, index=False)
 
-    resultat = psr.traiter_modification({"ID_Set à modifier": "10321"})
+    resultat = psr.traiter_modification({"Set à modifier": "10321 — Corvette"})
     assert resultat is False
     assert any("Rien à modifier" in c for c in commentaires)
 
@@ -191,7 +191,7 @@ def test_traiter_modification_change_le_prix_alerte(config_vide):
     df.to_excel(fichier, index=False)
 
     resultat = psr.traiter_modification({
-        "ID_Set à modifier": "10321",
+        "Set à modifier": "10321 — Corvette",
         "Prix d'alerte (laisser vide = ne pas changer)": "45",
     })
     assert resultat is True
@@ -206,7 +206,7 @@ def test_traiter_modification_supprime_le_prix_alerte_avec_mot_cle(config_vide):
     df.to_excel(fichier, index=False)
 
     resultat = psr.traiter_modification({
-        "ID_Set à modifier": "10321",
+        "Set à modifier": "10321 — Corvette",
         "Prix d'alerte (laisser vide = ne pas changer)": "aucun",
     })
     assert resultat is True
@@ -220,7 +220,7 @@ def test_traiter_modification_prix_alerte_invalide(config_vide):
     df.to_excel(fichier, index=False)
 
     resultat = psr.traiter_modification({
-        "ID_Set à modifier": "10321",
+        "Set à modifier": "10321 — Corvette",
         "Prix d'alerte (laisser vide = ne pas changer)": "pas-un-nombre",
     })
     assert resultat is False
@@ -233,7 +233,7 @@ def test_traiter_modification_change_la_collection(config_vide):
     df.to_excel(fichier, index=False)
 
     resultat = psr.traiter_modification({
-        "ID_Set à modifier": "10321",
+        "Set à modifier": "10321 — Corvette",
         "Collection (laisser sur 'Ne pas modifier' pour ne rien changer)": "Technic",
     })
     assert resultat is True
@@ -247,7 +247,7 @@ def test_traiter_modification_ne_pas_modifier_laisse_intact(config_vide):
     df.to_excel(fichier, index=False)
 
     resultat = psr.traiter_modification({
-        "ID_Set à modifier": "10321",
+        "Set à modifier": "10321 — Corvette",
         "Collection (laisser sur 'Ne pas modifier' pour ne rien changer)": psr.OPTION_COLLECTION_NE_PAS_MODIFIER,
         "Prix d'alerte (laisser vide = ne pas changer)": "30",
     })
@@ -262,7 +262,7 @@ def test_traiter_modification_collection_autre_sans_precision_echoue(config_vide
     df.to_excel(fichier, index=False)
 
     resultat = psr.traiter_modification({
-        "ID_Set à modifier": "10321",
+        "Set à modifier": "10321 — Corvette",
         "Collection (laisser sur 'Ne pas modifier' pour ne rien changer)": psr.OPTION_COLLECTION_AUTRE,
     })
     assert resultat is False
@@ -271,6 +271,6 @@ def test_traiter_modification_collection_autre_sans_precision_echoue(config_vide
 
 def test_traiter_suppression_set_inconnu(config_vide):
     fichier, commentaires = config_vide
-    resultat = psr.traiter_suppression({"ID_Set à retirer": "99999"})
+    resultat = psr.traiter_suppression({"Set à retirer": "99999"})
     assert resultat is False
     assert any("n'a pas été trouvé" in c for c in commentaires)

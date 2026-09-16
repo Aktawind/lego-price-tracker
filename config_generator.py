@@ -13,6 +13,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 import historique_db
+from generer_formulaires import mettre_a_jour_dropdowns_sets
 
 FICHIER_CONFIG_EXCEL = "config_sets.xlsx"
 FICHIER_LISTE_SETS = "sets_a_analyser.txt"
@@ -383,6 +384,7 @@ def main():
         df_config = df_config.sort_values('ID_Set').reset_index(drop=True)
         df_config.to_excel(FICHIER_CONFIG_EXCEL, index=False)
         logging.info(f"Fichier '{FICHIER_CONFIG_EXCEL}' mis à jour.")
+        mettre_a_jour_dropdowns_sets()
     else:
         logging.info("Aucun changement de configuration nécessaire.")
 
