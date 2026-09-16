@@ -178,6 +178,69 @@ def traiter_ajout(champs):
     return True
 
 
+OPTION_COLLECTION_NE_PAS_MODIFIER = "Ne pas modifier"
+MOT_CLE_SUPPRESSION_SEUIL = "aucun"
+
+
+def traiter_modification(champs):
+    df_config = charger_config()
+    for col in ("Marque", "Prix_Alerte"):
+        if col not in df_config.columns:
+            df_config[col] = None
+
+    id_set = (champs.get("ID_Set à modifier") or "").strip()
+    if 'ID_Set' not in df_config.columns or id_set not in df_config['ID_Set'].astype(str).values:
+        commenter_issue(f"⚠️ Le set `{id_set}` n'a pas été trouvé dans le suivi, aucune action effectuée.")
+        return False
+
+    index = df_config.index[df_config['ID_Set'].astype(str) == id_set][0]
+    changements = {}
+
+    prix_alerte_brut = (champs.get("Prix d'alerte (laisser vide = ne pas changer)") or "").strip()
+    if prix_alerte_brut:
+        if prix_alerte_brut.lower() == MOT_CLE_SUPPRESSION_SEUIL:
+            changements['Prix_Alerte'] = None
+        else:
+            try:
+                changements['Prix_Alerte'] = float(prix_alerte_brut.replace(',', '.'))
+            except ValueError:
+                commenter_issue(
+                    f"❌ Prix d'alerte invalide : `{prix_alerte_brut}`. "
+                    f"Indique un nombre (ex: 45), le mot `{MOT_CLE_SUPPRESSION_SEUIL}` pour supprimer le seuil, "
+                    "ou laisse le champ vide pour ne rien changer."
+                )
+                return False
+
+    choix_collection = (champs.get("Collection (laisser sur 'Ne pas modifier' pour ne rien changer)") or "").strip()
+    if choix_collection and choix_collection != OPTION_COLLECTION_NE_PAS_MODIFIER:
+        if choix_collection == OPTION_COLLECTION_AUTRE:
+            autre = (champs.get("Nom de la collection (si 'Autre thème' choisi ci-dessus)") or "").strip()
+            if not autre:
+                commenter_issue("❌ Tu as choisi 'Autre thème' mais n'as pas précisé son nom dans le champ suivant.")
+                return False
+            changements['Collection'] = autre
+        else:
+            changements['Collection'] = choix_collection
+
+    if not changements:
+        commenter_issue("⚠️ Rien à modifier : remplis au moins le prix d'alerte ou la collection.")
+        return False
+
+    for colonne, valeur in changements.items():
+        # df_config est chargé en dtype=str (charger_config) : une valeur numérique
+        # doit être convertie en texte avant assignation, sinon pandas refuse
+        # (colonne typée string stricte).
+        df_config.at[index, colonne] = None if valeur is None else str(valeur)
+    df_config.to_excel(FICHIER_CONFIG_EXCEL, index=False)
+
+    resume = "\n".join(
+        f"- **{colonne}** : {'(supprimé)' if valeur is None else valeur}"
+        for colonne, valeur in changements.items()
+    )
+    commenter_issue(f"✏️ Set `{id_set}` mis à jour !\n\n{resume}")
+    return True
+
+
 def traiter_suppression(champs):
     df_config = charger_config()
     id_set = (champs.get("ID_Set à retirer") or "").strip()
@@ -221,8 +284,10 @@ def main():
         succes = traiter_ajout(champs)
     elif 'suppression-set' in labels:
         succes = traiter_suppression(champs)
+    elif 'modification-set' in labels:
+        succes = traiter_modification(champs)
     else:
-        logging.info("Issue sans label reconnu (ajout-set/suppression-set), rien à faire.")
+        logging.info("Issue sans label reconnu (ajout-set/suppression-set/modification-set), rien à faire.")
         return
 
     if succes:

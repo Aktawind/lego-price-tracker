@@ -1,4 +1,4 @@
-name: Traiter une demande de set (ajout/suppression)
+name: Traiter une demande de set (ajout/suppression/modification)
 
 on:
   issues:
@@ -15,7 +15,7 @@ jobs:
     # Sécurité : seuls les propriétaires/membres/collaborateurs du repo peuvent
     # déclencher une écriture automatique dans le dépôt via une issue.
     if: >
-      (contains(github.event.issue.labels.*.name, 'ajout-set') || contains(github.event.issue.labels.*.name, 'suppression-set')) &&
+      (contains(github.event.issue.labels.*.name, 'ajout-set') || contains(github.event.issue.labels.*.name, 'suppression-set') || contains(github.event.issue.labels.*.name, 'modification-set')) &&
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association)
     steps:
       - name: Checkout repository

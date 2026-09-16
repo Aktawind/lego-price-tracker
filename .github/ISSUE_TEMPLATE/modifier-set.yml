@@ -1,0 +1,61 @@
+name: "✏️ Modifier un set suivi"
+description: "Change le seuil d'alerte et/ou la collection d'un set déjà suivi, sans toucher à l'Excel."
+title: "[Modification] "
+labels: ["modification-set"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Remplis uniquement les champs que tu veux changer — laisse le reste tel quel
+        ("Ne pas modifier" pour la collection, champ vide pour le prix d'alerte).
+
+  - type: input
+    id: id_set
+    attributes:
+      label: "ID_Set à modifier"
+      description: "L'identifiant exact tel qu'il apparaît dans le suivi (ex: 10321)."
+      placeholder: "10321"
+    validations:
+      required: true
+
+  - type: input
+    id: prix_alerte
+    attributes:
+      label: "Prix d'alerte (laisser vide = ne pas changer)"
+      description: "Un nombre pour définir/changer le seuil (ex: 45), le mot 'aucun' pour le supprimer, ou vide pour ne rien changer."
+      placeholder: "45"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: collection
+    attributes:
+      label: "Collection (laisser sur 'Ne pas modifier' pour ne rien changer)"
+      options:
+        - "Ne pas modifier"
+        - "Architecture"
+        - "Art"
+        - "The Botanical Collection"
+        - "Creator 3-en-1"
+        - "Disney™"
+        - "Harry Potter™"
+        - "LEGO® Icons"
+        - "Ideas"
+        - "One Piece"
+        - "Speed Champions"
+        - "Star Wars™"
+        - "LEGO® Super Mario™"
+        - "Technic"
+        - "LEGO® Education"
+        - "Autre thème (précise-le dans le champ suivant)"
+      default: 0
+    validations:
+      required: false
+
+  - type: input
+    id: collection_autre
+    attributes:
+      label: "Nom de la collection (si 'Autre thème' choisi ci-dessus)"
+      placeholder: "ex: Ninjago"
+    validations:
+      required: false
