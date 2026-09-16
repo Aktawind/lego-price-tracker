@@ -16,7 +16,6 @@ import historique_db
 from generer_formulaires import mettre_a_jour_dropdowns_sets
 
 FICHIER_CONFIG_EXCEL = "config_sets.xlsx"
-FICHIER_LISTE_SETS = "sets_a_analyser.txt"
 
 # Dictionnaire pour mapper les domaines aux noms de colonnes dans l'Excel
 DOMAIN_TO_COLUMN_MAP = {
@@ -253,54 +252,18 @@ def main():
     logging.info("Lancement du générateur de configuration...")
     config_changed = False
 
-    # --- ÉTAPE 1 : CHARGER L'ÉTAT ACTUEL ET L'ÉTAT DÉSIRÉ ---
+    # --- ÉTAPE 1 : CHARGER LA CONFIG ---
+    # config_sets.xlsx est la seule source de vérité pour la liste des sets
+    # suivis (gérée via les formulaires GitHub "Ajouter/Modifier/Retirer un
+    # set", ou par édition manuelle). Ce script ne fait plus que compléter
+    # les métadonnées manquantes des sets déjà présents : il n'ajoute ni ne
+    # supprime jamais de set lui-même.
     try:
         df_config = pd.read_excel(FICHIER_CONFIG_EXCEL, dtype=str)
     except FileNotFoundError:
         df_config = pd.DataFrame(columns=["ID_Set"])
 
-    try:
-        with open(FICHIER_LISTE_SETS, 'r', encoding='utf-8') as f:
-            ids_desires = {line.strip() for line in f if line.strip().isdigit()}
-    except FileNotFoundError:
-        logging.warning(f"'{FICHIER_LISTE_SETS}' non trouvé. Aucune synchronisation de liste ne sera effectuée.")
-        ids_desires = set(df_config['ID_Set'].tolist()) # On considère que la liste actuelle est la bonne
-
-    ids_actuels = set(df_config['ID_Set'].tolist())
-
-    # --- ÉTAPE 2 : SYNCHRONISATION (AJOUTS ET SUPPRESSIONS DE LA LISTE) ---
-    
-    # Sets à supprimer
-    ids_a_supprimer = ids_actuels - ids_desires
-    if ids_a_supprimer:
-        logging.info(f"Suppression des sets non présents dans la liste : {ids_a_supprimer}")
-        df_config = df_config[~df_config['ID_Set'].isin(ids_a_supprimer)]
-        config_changed = True
-        # Nettoyer l'historique
-        historique_db.supprimer_sets(ids_a_supprimer)
-        logging.info(f"Historique des prix nettoyé pour les sets supprimés.")
-
-    # Sets à ajouter
-    ids_a_ajouter = ids_desires - ids_actuels
-    if ids_a_ajouter:
-        logging.info(f"Ajout de nouveaux sets depuis la liste : {ids_a_ajouter}")
-        nouvelles_lignes = []
-        for set_id in ids_a_ajouter:
-            metadata = get_lego_metadata(set_id)
-            if metadata:
-                nouvelle_ligne = {
-                    "ID_Set": set_id, "Nom_Set": metadata['nom'], "nbPieces": metadata['nb_pieces'],
-                    "Collection": metadata['collection'], "Image_URL": metadata['image_url'],
-                    "URL_Lego": metadata['url_lego'], "Marque": "LEGO"
-                }
-                nouvelles_lignes.append(nouvelle_ligne)
-        
-        if nouvelles_lignes:
-            nouvelles_lignes_df = pd.DataFrame(nouvelles_lignes)
-            df_config = pd.concat([df_config, nouvelles_lignes_df], ignore_index=True)
-            config_changed = True
-
-    # --- ÉTAPE 2bis : AUTO-RÉPARATION DES MÉTADONNÉES MANQUANTES ---
+    # --- ÉTAPE 2 : AUTO-RÉPARATION DES MÉTADONNÉES MANQUANTES ---
     # Un set déjà présent dans la config n'était jamais revisité, même si sa
     # récupération initiale avait échoué partiellement (image, collection ou
     # nombre de pièces manquants). On retente pour ces sets LEGO uniquement
@@ -336,49 +299,7 @@ def main():
                     df_config.at[index, 'nbPieces'] = metadata['nb_pieces']
                     config_changed = True
 
-    # --- ÉTAPE 3 : GESTION DES FICHIERS DE COMMANDE INDIVIDUELS (EN PRIORITÉ) ---
-    fichiers_commandes = [f for f in os.listdir() if not f.startswith('.') and os.path.splitext(os.path.basename(f))[0].isdigit()]
-    
-    for file_path in fichiers_commandes:
-        set_id = os.path.splitext(os.path.basename(file_path))[0]
-        with open(file_path, 'r', encoding='utf-8') as f:
-            lignes = f.readlines()
-        
-        contenu_simple = "".join(lignes).strip().lower()
-
-        if contenu_simple == 'delete':
-            # La commande 'delete' via fichier individuel a la priorité
-            if set_id in df_config['ID_Set'].values:
-                df_config = df_config[df_config['ID_Set'] != set_id]
-                logging.info(f"Set {set_id} supprimé via fichier de commande.")
-                config_changed = True
-
-                historique_db.supprimer_set(set_id)
-                logging.info(f"Historique des prix pour le set {set_id} nettoyé.")
-            else:
-                logging.warning(f"Le set {set_id} à supprimer n'a pas été trouvé.")
-        else:
-            # Traitement des URL dans le fichier
-            urls = [line.strip(' :\t\n\r') for line in lignes if line.strip()]
-            if not urls: continue # Si le fichier est vide, on l'ignore
-            
-            if set_id in df_config['ID_Set'].values:
-                logging.info(f"Fusion des URL du fichier {file_path} pour le set {set_id}...")
-                index_a_modifier = df_config.index[df_config['ID_Set'] == set_id].item()
-                for url in urls:
-                    for domain, column in DOMAIN_TO_COLUMN_MAP.items():
-                        if domain in url:
-                            df_config.loc[index_a_modifier, column] = url
-                            break
-                config_changed = True
-            else:
-                logging.warning(f"Le fichier {file_path} concerne un set ({set_id}) qui n'est pas dans la liste. Ajoutez-le à sets_a_analyser.txt d'abord.")
-
-        # Correction du bug : On supprime le fichier après l'avoir traité
-        os.remove(file_path)
-        logging.info(f"Fichier de commande '{file_path}' traité et supprimé.")
-
-    # --- ÉTAPE 4 : SAUVEGARDE FINALE ---
+    # --- ÉTAPE 3 : SAUVEGARDE FINALE ---
     if config_changed:
         # On trie le DataFrame par ID de set pour un fichier propre
         df_config = df_config.sort_values('ID_Set').reset_index(drop=True)
