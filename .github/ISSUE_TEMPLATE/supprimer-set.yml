@@ -20,7 +20,6 @@ body:
     - 10300 — La machine à remonter le temps de Retour vers le futur
     - 10321 — Corvette
     - 10339 — Le bureau de poste du Père Noël
-    - 10361 — Le train de Noël
     - 10365 — Le bateau pirate du capitaine Jack Sparrow
     - 10370 — L’étoile de Noël
     - 10372 — Hibiscus
@@ -33,6 +32,5 @@ body:
     - 45200 — Kit de science Mission lunaire
     - 45201 — Kit de science Animaux de l’Antarctique
     - 80121 — L’auberge traditionnelle du clair de lune
-    - LUMI-LUNA — Luna Cottage
   validations:
     required: true
