@@ -1,3 +1,5 @@
+import os
+
 # --- ANALYSE DES PRIX ---
 
 # Dictionnaire de connaissance des prix moyens par pièce
@@ -13,8 +15,9 @@ PRIX_MOYEN_PAR_COLLECTION = {
     "One Piece": 0.0886,
     "Speed Champions": 0.0886,
     "Star Wars™": 0.1024, 
-    "LEGO® Super Mario™": 0.1108, 
-    "Technic": 0.1211, 
+    "LEGO® Super Mario™": 0.1108,
+    "Technic": 0.1211,
+    "LEGO® Education": 0.100,
     "default": 0.100
 }
 
@@ -22,6 +25,42 @@ PRIX_MOYEN_PAR_COLLECTION = {
 SEUIL_TRES_BONNE_AFFAIRE = 0.70  # 30% de réduction ou plus (prix <= 70% du prix juste)
 SEUIL_BONNE_AFFAIRE = 0.80      # Entre 20% et 29% de réduction (prix <= 80% du prix juste)
 # Tout ce qui est au-dessus du prix juste est considéré comme une "mauvaise affaire"
+
+WIKI_URL_PUBLIQUE = "https://github.com/Aktawind/lego-price-tracker/wiki"
+
+def construire_slug_wiki(id_set, nom_set):
+    """Construit le slug de page wiki utilisé par generer_wiki.py, pour pouvoir
+    pointer directement vers la fiche d'un set (et pas juste la page d'accueil)."""
+    nom_pour_url = str(nom_set).replace(':', '').replace(' ', '-')
+    return f"{id_set}-{nom_pour_url}"
+
+def construire_url_wiki_set(id_set, nom_set):
+    """URL complète de la fiche wiki d'un set donné."""
+    return f"{WIKI_URL_PUBLIQUE}/{construire_slug_wiki(id_set, nom_set)}"
+
+def accord_pluriel(n, suffixe='s'):
+    """'s' à accoler à un mot si n > 1, sinon rien -- pour éviter les tournures
+    du type 'baisse(s) de prix détectée(s)' dans les sujets d'email."""
+    return suffixe if n > 1 else ''
+
+# --- CONFIGURATION EMAIL (Brevo) ---
+# Commune à tous les scripts qui envoient des emails (catch_lego_price.py, deal_hunter.py).
+# Contrairement à Resend, Brevo n'offre pas d'expéditeur "bac à sable" partagé :
+# il faut toujours un expéditeur vérifié (BREVO_FROM_EMAIL), pas de valeur par
+# défaut possible.
+
+def charger_config_email():
+    return {
+        "api_key": os.getenv("BREVO_API_KEY"),
+        "expediteur": os.getenv("BREVO_FROM_EMAIL") or None,
+        # Nom affiché à la place de l'adresse technique (ex: ...@12159343.brevosend.com)
+        # dans la boîte de réception. BREVO_FROM_NAME est optionnel.
+        "expediteur_nom": os.getenv("BREVO_FROM_NAME") or "Lego Price Tracker",
+        "destinataire": os.getenv("MAIL_DESTINATAIRE"),
+    }
+
+def email_config_complete(email_config):
+    return bool(email_config.get("api_key") and email_config.get("expediteur") and email_config.get("destinataire"))
 
 # Liste des vendeurs à récupérer sur le site Avenue de la Brique
 MAP_VENDEURS = {

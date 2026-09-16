@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import re
+import json
 from bs4 import BeautifulSoup
 import logging
 import glob
@@ -11,10 +12,10 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+import historique_db
 
 FICHIER_CONFIG_EXCEL = "config_sets.xlsx"
 FICHIER_LISTE_SETS = "sets_a_analyser.txt"
-FICHIER_HISTORIQUE = "prix_lego.xlsx"
 
 # Dictionnaire pour mapper les domaines aux noms de colonnes dans l'Excel
 DOMAIN_TO_COLUMN_MAP = {
@@ -28,6 +29,98 @@ DOMAIN_TO_COLUMN_MAP = {
     "brickmo.com": "URL_Brickmo"
     # Ajoutez d'autres domaines au besoin
 }
+def champ_manquant(valeur):
+    """Un champ de config est considéré manquant s'il est NaN, vide, ou vaut
+    explicitement 'N/A' (valeur posée quand le scraping Lego.com a échoué)."""
+    return pd.isna(valeur) or str(valeur).strip() in ('', 'N/A', 'nan')
+
+
+def marque_est_lego(marque):
+    """Une marque non renseignée est considérée LEGO par défaut (rétrocompatibilité
+    avec les lignes de config créées avant l'ajout de la colonne Marque)."""
+    return pd.isna(marque) or str(marque).strip() == '' or str(marque).strip().upper() == 'LEGO'
+
+
+# Valeurs qui ne sont jamais un vrai thème/collection, même si une stratégie
+# d'extraction les trouve (ex: le fil d'Ariane ou la marque générique valent
+# souvent littéralement "LEGO", pas le nom de la gamme).
+VALEURS_COLLECTION_GENERIQUES = {'lego', 'lego.com', 'accueil', 'home', 'shop', 'produits', 'products', 'sets'}
+
+
+def _normaliser_pour_comparaison(texte):
+    """Enlève les symboles ™/®/© et espaces superflus pour comparer une valeur
+    à la liste des génériques, sans altérer le texte réellement stocké (certains
+    vrais thèmes comme "Star Wars™" ou "LEGO® Icons" incluent ces symboles)."""
+    return re.sub(r'[™®©]', '', texte).strip().lower()
+
+
+def _est_collection_utilisable(texte):
+    return bool(texte) and _normaliser_pour_comparaison(texte) not in VALEURS_COLLECTION_GENERIQUES
+
+
+def extraire_collection(soup):
+    """Essaie plusieurs stratégies pour trouver le thème/la collection LEGO d'un
+    set, du plus stable au moins stable (les classes CSS de lego.com changent
+    régulièrement, contrairement aux données structurées et à l'URL des liens).
+    Retourne (collection, methode) où methode est None si rien d'utilisable n'a
+    été trouvé (utile pour logguer un diagnostic exploitable sans avoir accès à
+    la page). Les valeurs trop génériques (ex: "LEGO" tout court) sont ignorées :
+    ce n'est pas un vrai thème, et mieux vaut laisser le champ vide que le
+    remplir avec une valeur trompeuse."""
+
+    # Plan A : données structurées JSON-LD (schema.org), pensées pour le SEO et
+    # donc en général plus stables que les classes CSS générées par le build JS.
+    try:
+        for script in soup.find_all('script', type='application/ld+json'):
+            try:
+                data = json.loads(script.string or '')
+            except (json.JSONDecodeError, TypeError):
+                continue
+            objets = data if isinstance(data, list) else [data]
+            for objet in objets:
+                if not isinstance(objet, dict):
+                    continue
+                categorie = objet.get('category')
+                if isinstance(categorie, str) and _est_collection_utilisable(categorie):
+                    return categorie.strip(), 'json-ld:category'
+                marque = objet.get('brand')
+                if isinstance(marque, dict) and _est_collection_utilisable(marque.get('name')):
+                    return marque['name'].strip(), 'json-ld:brand'
+                if objet.get('@type') == 'BreadcrumbList':
+                    items = objet.get('itemListElement') or []
+                    noms = [i.get('name', '').strip() for i in items if isinstance(i, dict) and i.get('name')]
+                    # Le premier élément est en général "Accueil"/"LEGO.com", le dernier le nom du set :
+                    # le thème est généralement l'avant-dernier.
+                    if len(noms) >= 2 and _est_collection_utilisable(noms[-2]):
+                        return noms[-2], 'json-ld:breadcrumb'
+    except Exception:
+        pass
+
+    # Plan B : lien vers la page du thème (l'URL /fr-fr/themes/... est un motif
+    # d'adressage propre à lego.com, indépendant du design de la page).
+    try:
+        lien_theme = soup.select_one('a[href*="/themes/"]')
+        if lien_theme:
+            texte = lien_theme.get_text(strip=True)
+            if _est_collection_utilisable(texte):
+                return texte, 'lien-theme'
+    except Exception:
+        pass
+
+    # Plan C : ancien sélecteur basé sur les classes CSS (peut se remettre à
+    # marcher si lego.com revient à un nommage proche, ou sur d'autres locales).
+    try:
+        collection_elem = soup.select_one('a[class*="BrandLink"] img')
+        if collection_elem and collection_elem.has_attr('alt'):
+            texte = collection_elem['alt'].strip().replace('Logo', '').strip()
+            if _est_collection_utilisable(texte):
+                return texte, 'css-brandlink'
+    except Exception:
+        pass
+
+    return 'N/A', None
+
+
 def get_lego_metadata(set_id):
     """Scrape Lego.com pour récupérer les métadonnées d'un set en utilisant Selenium."""
     logging.info(f"Récupération des métadonnées pour le set {set_id} sur Lego.com (via Selenium)...")
@@ -91,11 +184,20 @@ def get_lego_metadata(set_id):
             logging.warning(f"Impossible de trouver le nombre de pièces pour {set_id} avec toutes les méthodes.")
             
         # --- COLLECTION ---
-        collection = "N/A"
-        collection_elem = soup.select_one('a[class*="BrandLink"] img')
-        if collection_elem and collection_elem.has_attr('alt'):
-            collection = collection_elem['alt'].strip().replace('Logo', '').strip()
-        
+        collection, methode_collection = extraire_collection(soup)
+        if methode_collection:
+            logging.info(f"  -> Collection trouvée via '{methode_collection}'.")
+        else:
+            # Rien n'a marché : on logue de quoi diagnostiquer sans avoir besoin
+            # de rouvrir la page manuellement (les classes CSS de lego.com changent
+            # sans prévenir).
+            titre_page = soup.title.get_text(strip=True) if soup.title else "N/A"
+            liens_theme_proches = [a.get_text(strip=True) for a in soup.select('nav a, [class*="readcrumb"] a')][:8]
+            logging.warning(
+                f"Impossible de déterminer la collection pour {set_id}. "
+                f"Titre de page='{titre_page}', liens de navigation détectés={liens_theme_proches}"
+            )
+
         logging.info(f"Métadonnées récupérées : Nom='{nom_set}', Pièces='{nb_pieces}', Collection='{collection}'")
         return { "nom": nom_set, "image_url": image_url, "nb_pieces": nb_pieces, "collection": collection, "url_lego": url }
         
@@ -127,6 +229,7 @@ def process_set_file(file_path):
         "nbPieces": metadata['nb_pieces'],
         "Collection": metadata['collection'],
         "Image_URL": metadata['image_url'],
+        "Marque": "LEGO",
     }
     
     # Ajouter l'URL de Lego.com à la liste
@@ -173,12 +276,8 @@ def main():
         df_config = df_config[~df_config['ID_Set'].isin(ids_a_supprimer)]
         config_changed = True
         # Nettoyer l'historique
-        try:
-            df_historique = pd.read_excel(FICHIER_HISTORIQUE, dtype=str)
-            df_historique_nettoye = df_historique[~df_historique['ID_Set'].isin(ids_a_supprimer)]
-            df_historique_nettoye.to_excel(FICHIER_HISTORIQUE, index=False)
-            logging.info(f"Historique des prix nettoyé pour les sets supprimés.")
-        except FileNotFoundError: pass
+        historique_db.supprimer_sets(ids_a_supprimer)
+        logging.info(f"Historique des prix nettoyé pour les sets supprimés.")
 
     # Sets à ajouter
     ids_a_ajouter = ids_desires - ids_actuels
@@ -191,7 +290,7 @@ def main():
                 nouvelle_ligne = {
                     "ID_Set": set_id, "Nom_Set": metadata['nom'], "nbPieces": metadata['nb_pieces'],
                     "Collection": metadata['collection'], "Image_URL": metadata['image_url'],
-                    "URL_Lego": metadata['url_lego']
+                    "URL_Lego": metadata['url_lego'], "Marque": "LEGO"
                 }
                 nouvelles_lignes.append(nouvelle_ligne)
         
@@ -199,6 +298,42 @@ def main():
             nouvelles_lignes_df = pd.DataFrame(nouvelles_lignes)
             df_config = pd.concat([df_config, nouvelles_lignes_df], ignore_index=True)
             config_changed = True
+
+    # --- ÉTAPE 2bis : AUTO-RÉPARATION DES MÉTADONNÉES MANQUANTES ---
+    # Un set déjà présent dans la config n'était jamais revisité, même si sa
+    # récupération initiale avait échoué partiellement (image, collection ou
+    # nombre de pièces manquants). On retente pour ces sets LEGO uniquement
+    # (les autres marques n'ont pas de fiche Lego.com à scraper).
+    if 'ID_Set' in df_config.columns and not df_config.empty:
+        if 'Marque' not in df_config.columns:
+            df_config['Marque'] = None
+
+        for colonne in ('Image_URL', 'Collection', 'nbPieces'):
+            if colonne not in df_config.columns:
+                df_config[colonne] = None
+
+        ids_a_reparer = []
+        for index, row in df_config.iterrows():
+            if not marque_est_lego(row.get('Marque')):
+                continue
+            if any(champ_manquant(row.get(c)) for c in ('Image_URL', 'Collection', 'nbPieces')):
+                ids_a_reparer.append((index, row['ID_Set']))
+
+        if ids_a_reparer:
+            logging.info(f"Métadonnées incomplètes détectées pour {len(ids_a_reparer)} set(s), nouvelle tentative de récupération...")
+            for index, set_id in ids_a_reparer:
+                metadata = get_lego_metadata(set_id)
+                if not metadata:
+                    continue
+                if champ_manquant(df_config.at[index, 'Image_URL']) and metadata.get('image_url'):
+                    df_config.at[index, 'Image_URL'] = metadata['image_url']
+                    config_changed = True
+                if champ_manquant(df_config.at[index, 'Collection']) and metadata.get('collection') not in (None, 'N/A'):
+                    df_config.at[index, 'Collection'] = metadata['collection']
+                    config_changed = True
+                if champ_manquant(df_config.at[index, 'nbPieces']) and metadata.get('nb_pieces') not in (None, 'N/A'):
+                    df_config.at[index, 'nbPieces'] = metadata['nb_pieces']
+                    config_changed = True
 
     # --- ÉTAPE 3 : GESTION DES FICHIERS DE COMMANDE INDIVIDUELS (EN PRIORITÉ) ---
     fichiers_commandes = [f for f in os.listdir() if not f.startswith('.') and os.path.splitext(os.path.basename(f))[0].isdigit()]
@@ -217,13 +352,8 @@ def main():
                 logging.info(f"Set {set_id} supprimé via fichier de commande.")
                 config_changed = True
 
-                try:
-                    df_historique = pd.read_excel("prix_lego.xlsx", dtype=str)
-                    df_historique_nettoye = df_historique[df_historique['ID_Set'] != set_id]
-                    df_historique_nettoye.to_excel("prix_lego.xlsx", index=False)
-                    logging.info(f"Historique des prix pour le set {set_id} nettoyé.")
-                except FileNotFoundError:
-                    pass
+                historique_db.supprimer_set(set_id)
+                logging.info(f"Historique des prix pour le set {set_id} nettoyé.")
             else:
                 logging.warning(f"Le set {set_id} à supprimer n'a pas été trouvé.")
         else:

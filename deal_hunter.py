@@ -4,10 +4,10 @@ from bs4 import BeautifulSoup
 import logging
 import json
 import os
-import smtplib
 from dotenv import load_dotenv
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+
+import envoi_email
+from config_shared import charger_config_email, email_config_complete, accord_pluriel
 
 # --- CONFIGURATION ---
 URL_BONS_PLANS = "https://www.avenuedelabrique.com/promotions-et-bons-plans-lego"
@@ -29,16 +29,18 @@ def sauvegarder_deals_vus(deals_ids):
     with open(FICHIER_MEMOIRE, 'w', encoding='utf-8') as f:
         json.dump(list(deals_ids), f, indent=4)
 
+def resoudre_url_avenue(href):
+    """href est parfois déjà une URL absolue (https://...), parfois un chemin
+    relatif (/promotions/...) selon l'offre : ne préfixer que dans le second
+    cas, sinon on obtient une URL du type 'avenuedelabrique.comhttps://...'
+    qui ne résout à rien."""
+    return href if href.startswith('http') else f"{URL_BASE_AVENUE}{href}"
+
 def envoyer_email_alerte_deals(nouveaux_deals, email_config):
     """Envoie un email récapitulatif avec une belle mise en page HTML pour les nouveaux deals."""
     
-    sujet = f"🔥 Alerte Bons Plans LEGO : {len(nouveaux_deals)} nouvelle(s) promotion(s) trouvée(s) !"
-    
-    # On crée un email 'alternative' pour avoir une version texte et une version HTML
-    msg = MIMEMultipart('alternative')
-    msg['Subject'] = sujet
-    msg['From'] = email_config['adresse']
-    msg['To'] = email_config['destinataire']
+    s = accord_pluriel(len(nouveaux_deals))
+    sujet = f"🔥 Alerte Bons Plans LEGO : {len(nouveaux_deals)} nouvelle{s} promotion{s} trouvée{s} !"
 
     # On prépare les deux versions du corps de l'email
     text_body = "Bonjour,\n\nDe nouvelles promotions LEGO ont été détectées sur Avenue de la Brique.\n\n"
@@ -74,30 +76,18 @@ def envoyer_email_alerte_deals(nouveaux_deals, email_config):
 
     text_body += f"\n\nConsultez la page des bons plans pour plus d'informations."
     html_body += f'<hr><p>Ces informations proviennent de la page des bons plans. Consultez votre <a href="https://github.com/Aktawind/lego-price-tracker/wiki">tableau de bord</a> pour le suivi des prix de vos sets.</p></body></html>'
-    
-    # On attache les deux versions
-    msg.attach(MIMEText(text_body, 'plain'))
-    msg.attach(MIMEText(html_body, 'html'))
-    
-    try:
-        with smtplib.SMTP('smtp.gmail.com', 587) as smtp_server:
-            smtp_server.starttls()
-            smtp_server.login(email_config['adresse'], email_config['mot_de_passe'])
-            smtp_server.send_message(msg)
+
+    envoye = envoi_email.envoyer(sujet, text_body, html_body, email_config)
+    if envoye:
         logging.info("Email d'alerte pour les nouveaux bons plans envoyé !")
-    except Exception as e:
-        logging.error(f"Erreur lors de l'envoi de l'email de bons plans : {e}")
+    return envoye
 
 def main():
     logging.info("Lancement du chasseur de bons plans...")
 
     load_dotenv()
-    EMAIL_CONFIG = {
-        "adresse": os.getenv('GMAIL_ADDRESS'),
-        "mot_de_passe": os.getenv('GMAIL_APP_PASSWORD'),
-        "destinataire": os.getenv('MAIL_DESTINATAIRE')
-    }
-    config_email_complete = all(EMAIL_CONFIG.values())
+    EMAIL_CONFIG = charger_config_email()
+    config_email_complete = email_config_complete(EMAIL_CONFIG)
     
     deals_vus = charger_deals_vus()
     nouveaux_deals = []
@@ -124,7 +114,7 @@ def main():
                 marchand = offre.select_one('.pn-btn strong').text.strip()
                 titre = offre.select_one('.pn-lib').text.replace(marchand, '', 1).strip()
                 details = offre.select_one('.pn-txt').text.strip()
-                url = f"{URL_BASE_AVENUE}{href}"
+                url = resoudre_url_avenue(href)
                 
                 nouveaux_deals.append({
                     "marchand": marchand,
@@ -177,5 +167,4 @@ def main():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-    logging.warning("Configuration email incomplète. Le script s'exécutera sans envoyer de notifications.")
     main()

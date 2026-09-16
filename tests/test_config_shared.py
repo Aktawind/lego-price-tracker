@@ -1,0 +1,56 @@
+from config_shared import (
+    construire_slug_wiki, construire_url_wiki_set, email_config_complete,
+    PRIX_MOYEN_PAR_COLLECTION, charger_config_email, accord_pluriel,
+)
+
+
+def test_construire_slug_wiki_remplace_espaces_et_deux_points():
+    assert construire_slug_wiki("10321", "Corvette") == "10321-Corvette"
+    # Les ':' sont retirés (cassent les liens wiki) puis les espaces convertis en '-'.
+    assert construire_slug_wiki("21351", "L'Étrange Noël: Disney") == "21351-L'Étrange-Noël-Disney"
+
+
+def test_construire_url_wiki_set_pointe_vers_la_bonne_page():
+    url = construire_url_wiki_set("10321", "Corvette")
+    assert url == "https://github.com/Aktawind/lego-price-tracker/wiki/10321-Corvette"
+
+
+def test_email_config_complete():
+    assert email_config_complete({"api_key": "abc", "expediteur": "x@x.com", "destinataire": "a@a.com"}) is True
+    assert email_config_complete({"api_key": None, "expediteur": "x@x.com", "destinataire": "a@a.com"}) is False
+    assert email_config_complete({"api_key": "abc", "expediteur": None, "destinataire": "a@a.com"}) is False
+    assert email_config_complete({"api_key": "abc", "expediteur": "x@x.com", "destinataire": None}) is False
+    assert email_config_complete({}) is False
+
+
+def test_prix_moyen_par_collection_valeurs_connues():
+    # Le taux par défaut (sets sans collection connue) est de 10 centimes/pièce.
+    assert PRIX_MOYEN_PAR_COLLECTION['default'] == 0.100
+    assert PRIX_MOYEN_PAR_COLLECTION['LEGO® Icons'] == 0.0883
+    assert PRIX_MOYEN_PAR_COLLECTION['LEGO® Education'] == 0.100
+
+
+def test_charger_config_email_expediteur_absent_si_pas_configure(monkeypatch):
+    # Contrairement à Resend, Brevo n'a pas d'expéditeur "bac à sable" par défaut :
+    # sans BREVO_FROM_EMAIL, l'expéditeur doit rester vide (pas de valeur inventée).
+    monkeypatch.delenv("BREVO_FROM_EMAIL", raising=False)
+    assert charger_config_email()["expediteur"] is None
+
+
+def test_charger_config_email_expediteur_vide_traite_comme_absent(monkeypatch):
+    # Même piège que pour Resend : GitHub Actions règle la variable même quand
+    # le secret n'existe pas côté repo, mais avec une valeur vide.
+    monkeypatch.setenv("BREVO_FROM_EMAIL", "")
+    assert charger_config_email()["expediteur"] is None
+
+
+def test_charger_config_email_expediteur_personnalise(monkeypatch):
+    monkeypatch.setenv("BREVO_FROM_EMAIL", "alertes@mondomaine.fr")
+    assert charger_config_email()["expediteur"] == "alertes@mondomaine.fr"
+
+
+def test_accord_pluriel():
+    assert accord_pluriel(0) == ''  # "0 baisse détectée", pas "0 baisses détectées"
+    assert accord_pluriel(1) == ''
+    assert accord_pluriel(2) == 's'
+    assert accord_pluriel(8) == 's'

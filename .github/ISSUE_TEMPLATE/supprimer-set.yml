@@ -1,0 +1,19 @@
+name: "🗑️ Retirer un set du suivi"
+description: "Retire un set (acheté, plus suivi, etc.) du suivi de prix et nettoie son historique."
+title: "[Suppression] "
+labels: ["suppression-set"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Le set sera retiré de la configuration et son historique de prix sera supprimé.
+        Il n'apparaîtra plus dans le wiki ni dans les rapports.
+
+  - type: input
+    id: id_set
+    attributes:
+      label: "ID_Set à retirer"
+      description: "L'identifiant exact tel qu'il apparaît dans le suivi (ex: 10321)."
+      placeholder: "10321"
+    validations:
+      required: true

@@ -1,0 +1,45 @@
+name: Traiter une demande de set (ajout/suppression/modification)
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  process:
+    name: Traiter le formulaire et mettre à jour la config
+    runs-on: ubuntu-latest
+    # Sécurité : seuls les propriétaires/membres/collaborateurs du repo peuvent
+    # déclencher une écriture automatique dans le dépôt via une issue.
+    if: >
+      (contains(github.event.issue.labels.*.name, 'ajout-set') || contains(github.event.issue.labels.*.name, 'suppression-set') || contains(github.event.issue.labels.*.name, 'modification-set')) &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association)
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup Chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Process issue form
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_LABELS: ${{ join(github.event.issue.labels.*.name, ',') }}
+        run: python process_set_request.py
