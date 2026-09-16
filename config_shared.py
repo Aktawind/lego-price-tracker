@@ -48,6 +48,9 @@ def charger_config_email():
     return {
         "api_key": os.getenv("BREVO_API_KEY"),
         "expediteur": os.getenv("BREVO_FROM_EMAIL") or None,
+        # Nom affiché à la place de l'adresse technique (ex: ...@12159343.brevosend.com)
+        # dans la boîte de réception. BREVO_FROM_NAME est optionnel.
+        "expediteur_nom": os.getenv("BREVO_FROM_NAME") or "Lego Price Tracker",
         "destinataire": os.getenv("MAIL_DESTINATAIRE"),
     }
 

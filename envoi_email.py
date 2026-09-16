@@ -14,6 +14,7 @@ def envoyer(sujet, text_body, html_body, email_config):
     """Envoie un email via l'API Brevo. Retourne True en cas de succès."""
     api_key = email_config.get('api_key')
     expediteur = email_config.get('expediteur')
+    expediteur_nom = email_config.get('expediteur_nom')
     destinataire = email_config.get('destinataire')
 
     if not (api_key and expediteur and destinataire):
@@ -21,6 +22,9 @@ def envoyer(sujet, text_body, html_body, email_config):
         return False
 
     destinataires = [{"email": d.strip()} for d in destinataire.split(',') if d.strip()]
+    sender = {"email": expediteur}
+    if expediteur_nom:
+        sender["name"] = expediteur_nom
 
     try:
         reponse = requests.post(
@@ -31,7 +35,7 @@ def envoyer(sujet, text_body, html_body, email_config):
                 "Accept": "application/json",
             },
             json={
-                "sender": {"email": expediteur},
+                "sender": sender,
                 "to": destinataires,
                 "subject": sujet,
                 "htmlContent": html_body,
