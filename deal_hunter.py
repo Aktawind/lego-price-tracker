@@ -7,7 +7,7 @@ import os
 from dotenv import load_dotenv
 
 import envoi_email
-from config_shared import charger_config_email, email_config_complete
+from config_shared import charger_config_email, email_config_complete, accord_pluriel
 
 # --- CONFIGURATION ---
 URL_BONS_PLANS = "https://www.avenuedelabrique.com/promotions-et-bons-plans-lego"
@@ -29,10 +29,18 @@ def sauvegarder_deals_vus(deals_ids):
     with open(FICHIER_MEMOIRE, 'w', encoding='utf-8') as f:
         json.dump(list(deals_ids), f, indent=4)
 
+def resoudre_url_avenue(href):
+    """href est parfois déjà une URL absolue (https://...), parfois un chemin
+    relatif (/promotions/...) selon l'offre : ne préfixer que dans le second
+    cas, sinon on obtient une URL du type 'avenuedelabrique.comhttps://...'
+    qui ne résout à rien."""
+    return href if href.startswith('http') else f"{URL_BASE_AVENUE}{href}"
+
 def envoyer_email_alerte_deals(nouveaux_deals, email_config):
     """Envoie un email récapitulatif avec une belle mise en page HTML pour les nouveaux deals."""
     
-    sujet = f"🔥 Alerte Bons Plans LEGO : {len(nouveaux_deals)} nouvelle(s) promotion(s) trouvée(s) !"
+    s = accord_pluriel(len(nouveaux_deals))
+    sujet = f"🔥 Alerte Bons Plans LEGO : {len(nouveaux_deals)} nouvelle{s} promotion{s} trouvée{s} !"
 
     # On prépare les deux versions du corps de l'email
     text_body = "Bonjour,\n\nDe nouvelles promotions LEGO ont été détectées sur Avenue de la Brique.\n\n"
@@ -106,7 +114,7 @@ def main():
                 marchand = offre.select_one('.pn-btn strong').text.strip()
                 titre = offre.select_one('.pn-lib').text.replace(marchand, '', 1).strip()
                 details = offre.select_one('.pn-txt').text.strip()
-                url = f"{URL_BASE_AVENUE}{href}"
+                url = resoudre_url_avenue(href)
                 
                 nouveaux_deals.append({
                     "marchand": marchand,

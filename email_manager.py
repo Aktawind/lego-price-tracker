@@ -2,6 +2,7 @@
 import logging
 
 import envoi_email
+from config_shared import accord_pluriel
 
 COULEUR_RECORD = "#d9534f"
 COULEUR_BONNE_AFFAIRE = "#28a745"
@@ -40,9 +41,12 @@ def envoyer_email_recapitulatif(baisses_de_prix, email_config):
     nombre_baisses = len(baisses_de_prix)
     nombre_records = sum(1 for d in baisses_de_prix if d.get('est_record_absolu'))
     if nombre_records:
-        sujet = f"🏆 {nombre_records} prix jamais vu(s) ! ({nombre_baisses} baisse(s) au total)"
+        s_record = accord_pluriel(nombre_records)
+        s_baisse = accord_pluriel(nombre_baisses)
+        sujet = f"🏆 {nombre_records} prix jamais vu{s_record} ! ({nombre_baisses} baisse{s_baisse} au total)"
     else:
-        sujet = f"Alerte Prix LEGO : {nombre_baisses} baisse(s) de prix détectée(s) !"
+        s_baisse = accord_pluriel(nombre_baisses)
+        sujet = f"Alerte Prix LEGO : {nombre_baisses} baisse{s_baisse} de prix détectée{s_baisse} !"
 
     # Version texte (clients mail sans HTML, ou aperçu rapide)
     text_body = "Bonjour,\n\nVoici les baisses de prix détectées aujourd'hui :\n\n"
@@ -51,7 +55,7 @@ def envoyer_email_recapitulatif(baisses_de_prix, email_config):
     html_body = """
     <html><body style="font-family: Arial, Helvetica, sans-serif; background-color:#f4f4f7; margin:0; padding:20px;">
     <div style="max-width:640px; margin:0 auto;">
-    <h2 style="color:#222;">🧱 Baisses de prix détectées</h2>
+    <h2 style="color:#222;">Baisses de prix détectées</h2>
     """
 
     # Les deals avec le prix jamais vu le plus intéressant en premier

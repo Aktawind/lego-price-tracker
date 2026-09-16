@@ -38,6 +38,11 @@ def construire_url_wiki_set(id_set, nom_set):
     """URL complète de la fiche wiki d'un set donné."""
     return f"{WIKI_URL_PUBLIQUE}/{construire_slug_wiki(id_set, nom_set)}"
 
+def accord_pluriel(n, suffixe='s'):
+    """'s' à accoler à un mot si n > 1, sinon rien -- pour éviter les tournures
+    du type 'baisse(s) de prix détectée(s)' dans les sujets d'email."""
+    return suffixe if n > 1 else ''
+
 # --- CONFIGURATION EMAIL (Brevo) ---
 # Commune à tous les scripts qui envoient des emails (catch_lego_price.py, deal_hunter.py).
 # Contrairement à Resend, Brevo n'offre pas d'expéditeur "bac à sable" partagé :

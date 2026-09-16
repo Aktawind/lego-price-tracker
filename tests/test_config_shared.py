@@ -1,6 +1,6 @@
 from config_shared import (
     construire_slug_wiki, construire_url_wiki_set, email_config_complete,
-    PRIX_MOYEN_PAR_COLLECTION, charger_config_email,
+    PRIX_MOYEN_PAR_COLLECTION, charger_config_email, accord_pluriel,
 )
 
 
@@ -47,3 +47,10 @@ def test_charger_config_email_expediteur_vide_traite_comme_absent(monkeypatch):
 def test_charger_config_email_expediteur_personnalise(monkeypatch):
     monkeypatch.setenv("BREVO_FROM_EMAIL", "alertes@mondomaine.fr")
     assert charger_config_email()["expediteur"] == "alertes@mondomaine.fr"
+
+
+def test_accord_pluriel():
+    assert accord_pluriel(0) == ''  # "0 baisse détectée", pas "0 baisses détectées"
+    assert accord_pluriel(1) == ''
+    assert accord_pluriel(2) == 's'
+    assert accord_pluriel(8) == 's'
