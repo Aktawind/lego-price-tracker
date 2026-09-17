@@ -7,6 +7,25 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 
+def _sauvegarder_diagnostic(driver, prefixe):
+    """Sauvegarde une capture d'écran + le HTML de la page courante. On n'a
+    aucun accès direct à amazon.fr depuis l'environnement de dev pour
+    comprendre pourquoi une page ne donne pas de prix (CAPTCHA ? page de
+    vérification anti-bot ? mise en page différente ?) : ces fichiers sont
+    remontés comme artefact du run GitHub Actions (voir lego_tracker.yml)
+    pour pouvoir être consultés après coup."""
+    horodatage = int(time.time())
+    try:
+        driver.save_screenshot(f"{prefixe}_{horodatage}.png")
+    except Exception:
+        pass
+    try:
+        with open(f"{prefixe}_{horodatage}.html", 'w', encoding='utf-8') as f:
+            f.write(driver.page_source)
+    except Exception:
+        pass
+
+
 def _extraire_prix_depuis_soup(soup):
     """Cherche un prix dans le HTML déjà chargé d'une page produit Amazon,
     séparé de la navigation Selenium pour être testable sans navigateur."""
@@ -62,9 +81,13 @@ def scrape(driver, url):
             logging.warning(f"  -> Conteneur de prix non détecté dans le délai pour {url}, tentative d'extraction quand même...")
 
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        return _extraire_prix_depuis_soup(soup)
+        prix = _extraire_prix_depuis_soup(soup)
+        if prix is None:
+            logging.warning(f"  -> Aucun prix trouvé sur {url} (titre de la page : '{driver.title}'). Capture de diagnostic enregistrée.")
+            _sauvegarder_diagnostic(driver, "debug_amazon")
+        return prix
 
     except Exception as e:
         logging.error(f"Erreur lors du scraping de l'URL Amazon {url}: {type(e).__name__}: {e}")
-        driver.save_screenshot(f"error_amazon_{int(time.time())}.png")
+        _sauvegarder_diagnostic(driver, "error_amazon")
         return None

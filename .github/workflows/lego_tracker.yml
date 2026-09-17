@@ -56,6 +56,23 @@ jobs:
           MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE }}
         run: python catch_lego_price.py
 
+      # --- ÉTAPE 2bis : DIAGNOSTIC (si le scraping Amazon n'a pas trouvé de prix) ---
+      # scrapers/amazon_scraper.py sauvegarde une capture d'écran + le HTML de
+      # la page en cas d'échec (debug_amazon_*/error_amazon_*), pour pouvoir
+      # voir ce qu'Amazon a réellement affiché sans accès direct au site.
+      # if-no-files-found: ignore -> ne fait pas échouer le run les jours où
+      # tout s'est bien passé (aucun fichier de diagnostic produit).
+      - name: Upload Amazon scraping diagnostics (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: amazon-diagnostics
+          path: |
+            debug_amazon_*
+            error_amazon_*
+          if-no-files-found: ignore
+          retention-days: 7
+
       # --- ÉTAPE 3 : COMMIT UNIQUE DE TOUS LES CHANGEMENTS DE DONNÉES ---
       # On rassemble ici TOUS les changements de TOUS les scripts précédents
       - name: Commit data files changes
