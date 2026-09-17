@@ -11,7 +11,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
-from config_shared import MAP_VENDEURS
+from config_shared import MAP_VENDEURS, driver_est_vivant, executer_avec_retries
 
 # --- CONFIGURATION ---
 FICHIER_CONFIG_EXCEL = "config_sets.xlsx"
@@ -55,6 +55,14 @@ def extraire_offres_de_la_page(soup):
     
     return offres_trouvees
 
+def _creer_driver():
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--window-size=1920,1080")
+    return webdriver.Chrome(options=options)
+
+
 def main():
     """Script principal pour scraper Avenue de la Brique."""
     logging.info("Lancement du scraper d'Avenue de la Brique...")
@@ -64,19 +72,25 @@ def main():
         logging.error(f"'{FICHIER_CONFIG_EXCEL}' introuvable. Arrêt.")
         return
 
-    options = Options()
-    options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--window-size=1920,1080")
-    driver = webdriver.Chrome(options=options)
+    driver = _creer_driver()
     wait = WebDriverWait(driver, 10)
-    
+
     deals_par_set = {}
     for index, row in df_config.iterrows():
         set_id = row['ID_Set']
         url_avenue_specifique = row.get('URL_AvenueDeLaBrique')
-        
-        try:
+
+        def _tenter_un_set():
+            nonlocal driver, wait
+            if not driver_est_vivant(driver):
+                logging.warning(f"Session Selenium invalide détectée pour le set {set_id}, redémarrage du driver...")
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
+                driver = _creer_driver()
+                wait = WebDriverWait(driver, 10)
+
             if url_avenue_specifique:
                 logging.info(f"Utilisation de l'URL directe pour le set {set_id}...")
                 driver.get(url_avenue_specifique)
@@ -91,23 +105,35 @@ def main():
                 champ_recherche.clear()
                 champ_recherche.send_keys(set_id)
                 champ_recherche.send_keys(Keys.RETURN)
-            
+
             # Attente commune pour les deux cas
             wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.prodf-comp-px")))
             soup = BeautifulSoup(driver.page_source, 'html.parser')
-            
+
             # On appelle notre extracteur unique
             offres = extraire_offres_de_la_page(soup)
             if offres:
                 deals_par_set[set_id] = offres
-        
-        except Exception as e:
-            logging.error(f"Erreur lors du traitement du set {set_id} sur Avenue de la Brique : {e}")
-        
+
+        # Un aléa ponctuel (timeout, popup, page lente) sur un set ne doit pas
+        # faire perdre sa mise à jour de prix du jour : on retente une fois
+        # avant d'abandonner (et on redémarre le driver s'il a planté).
+        succes, erreur = executer_avec_retries(
+            _tenter_un_set, max_essais=2, pause_secondes=3,
+            on_echec=lambda e, tentative: logging.warning(
+                f"Tentative {tentative} échouée pour le set {set_id}, nouvel essai... ({e})"
+            ),
+        )
+        if not succes:
+            logging.error(f"Erreur lors du traitement du set {set_id} sur Avenue de la Brique : {erreur}")
+
         time.sleep(3)
-    
-    driver.quit()
-    
+
+    try:
+        driver.quit()
+    except Exception:
+        pass
+
     # Le dédoublonnage reste le même
     deals_finaux = {}
     logging.info("Nettoyage des offres pour ne garder que la meilleure par site...")

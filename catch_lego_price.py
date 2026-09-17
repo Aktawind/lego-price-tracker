@@ -9,6 +9,7 @@ import json
 from config_shared import (
     PRIX_MOYEN_PAR_COLLECTION, SEUIL_BONNE_AFFAIRE, SEUIL_TRES_BONNE_AFFAIRE,
     construire_url_wiki_set, charger_config_email, email_config_complete,
+    driver_est_vivant, executer_avec_retries,
 )
 
 from selenium import webdriver
@@ -141,16 +142,6 @@ def analyser_record_prix(df_set_historique_precedent, nouveau_prix, fenetre_rece
         return f"📉 Plus bas prix des {mois} derniers mois !", False, True
     return None, False, False
 
-def driver_est_vivant(driver):
-    """Vérifie qu'une session Selenium est toujours utilisable (le driver peut
-    planter en cours de route sur un runner CI, sans forcément lever d'exception
-    visible côté scraper individuel)."""
-    try:
-        _ = driver.current_url
-        return True
-    except Exception:
-        return False
-
 def obtenir_localisation_ip():
     """
     Interroge le service ipinfo.io pour connaître le code pays de l'adresse IP actuelle.
@@ -268,11 +259,10 @@ def verifier_les_prix():
                     pays_actuel = obtenir_localisation_ip()
                     if pays_actuel and pays_actuel != 'FR':
                         logging.info(f"IP non-française ({pays_actuel}) détectée. Forçage de la localisation pour Amazon...")
-                        try:
+
+                        def _tenter_forcer_localisation():
                             driver.get("https://www.amazon.fr/")
                             wait = WebDriverWait(driver, 10)
-                            
-                            # === DÉBUT DE LA MODIFICATION ===
 
                             # 1. On gère les cookies sur la page d'accueil AVANT tout le reste
                             try:
@@ -290,25 +280,36 @@ def verifier_les_prix():
                                 EC.element_to_be_clickable((By.XPATH, xpath_localisation))
                             )
                             bouton_localisation.click()
-                            
+
                             # 3. Le reste est inchangé car vos nouveaux extraits HTML le confirment
                             champ_postal = wait.until(EC.visibility_of_element_located((By.ID, "GLUXZipUpdateInput")))
                             champ_postal.clear() # On vide le champ au cas où il serait pré-rempli
                             champ_postal.send_keys("38540")
-                            
+
                             bouton_actualiser_container = wait.until(EC.element_to_be_clickable((By.ID, "GLUXZipUpdate")))
                             bouton_actualiser_container.click()
-                            
+
                             # 4. On attend que la page se recharge en vérifiant que le code postal est bien mis à jour
                             wait.until(EC.text_to_be_present_in_element((By.ID, "glow-ingress-line2"), "38540"))
-                            logging.info("Localisation française pour Amazon forcée avec succès.")  
-                            
-                        except Exception as e:
-                            # Si la localisation échoue, c'est une erreur critique pour Amazon
-                            logging.error(f"La procédure de forçage de localisation pour Amazon a échoué : {e}")
+
+                        # Amazon a parfois un aléa ponctuel (popup, page lente) sur cette
+                        # procédure : un seul essai perdait toutes les vérifications Amazon
+                        # du jour (donc tout l'historique de prix des sets suivis uniquement
+                        # via Amazon, comme LUMI-LUNA) pour un simple raté transitoire.
+                        succes, erreur = executer_avec_retries(
+                            _tenter_forcer_localisation, max_essais=2, pause_secondes=3,
+                            on_echec=lambda e, tentative: logging.warning(
+                                f"Tentative {tentative} de forçage de localisation Amazon échouée, nouvel essai... ({e})"
+                            ),
+                        )
+                        if succes:
+                            logging.info("Localisation française pour Amazon forcée avec succès.")
+                        else:
+                            # Si la localisation échoue malgré la nouvelle tentative, c'est une erreur critique pour Amazon
+                            logging.error(f"La procédure de forçage de localisation pour Amazon a échoué : {erreur}")
                             driver.quit() # On ferme le driver
                             continue # ON PASSE AU SITE SUIVANT
-                            
+
                     else:
                         logging.info("IP française (ou non détectée), pas de forçage nécessaire pour Amazon.")
 

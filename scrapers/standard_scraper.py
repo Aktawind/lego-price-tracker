@@ -82,6 +82,15 @@ def scrape(url, selecteur, headers=None, driver=None):
             logging.info(f"  -> Prix trouvé via les données JSON-LD : {prix_json_ld}€")
             return prix_json_ld
 
+        # Diagnostic : distingue "pas de JSON-LD du tout sur la page" (page
+        # d'erreur, blocage anti-bot...) de "JSON-LD présent mais sans prix
+        # exploitable" (ex: set en rupture de stock, structure différente),
+        # pour pouvoir diagnostiquer un futur échec sans accès direct au site.
+        if soup.find_all('script', type='application/ld+json'):
+            logging.warning(f"  -> Données JSON-LD présentes sur {url} mais aucun prix exploitable n'y a été trouvé.")
+        else:
+            logging.warning(f"  -> Aucune donnée JSON-LD trouvée sur {url}.")
+
         return None
 
     except Exception as e:

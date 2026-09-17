@@ -74,3 +74,21 @@ def test_scrape_retourne_none_si_rien_ne_marche(monkeypatch):
     monkeypatch.setattr(standard_scraper.requests, 'get', lambda *a, **k: FausseReponse(html))
     prix = standard_scraper.scrape('https://example.com', '.prix', headers={})
     assert prix is None
+
+
+def test_scrape_log_distingue_json_ld_absent_de_json_ld_sans_prix(monkeypatch, caplog):
+    # Diagnostic utile pour un futur échec sans accès direct au site : on veut
+    # pouvoir distinguer "page bloquée / pas de JSON-LD" de "JSON-LD présent
+    # mais sans champ prix exploitable" (ex: rupture de stock).
+    monkeypatch.setattr(standard_scraper.requests, 'get',
+                         lambda *a, **k: FausseReponse('<html><body><p>Aucun prix ici</p></body></html>'))
+    with caplog.at_level('WARNING'):
+        standard_scraper.scrape('https://example.com', '.prix', headers={})
+    assert "Aucune donnée JSON-LD trouvée" in caplog.text
+
+    caplog.clear()
+    html_sans_prix = '<script type="application/ld+json">{"offers": {"availability": "OutOfStock"}}</script>'
+    monkeypatch.setattr(standard_scraper.requests, 'get', lambda *a, **k: FausseReponse(html_sans_prix))
+    with caplog.at_level('WARNING'):
+        standard_scraper.scrape('https://example.com', '.prix', headers={})
+    assert "présentes" in caplog.text or "présent" in caplog.text

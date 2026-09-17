@@ -1,4 +1,5 @@
 import os
+import time
 
 # --- ANALYSE DES PRIX ---
 
@@ -75,5 +76,44 @@ MAP_VENDEURS = {
     "chez lego": "Lego",
     "chez jouéclub": "JouéClub",
     "chez kidinn": "KidInn",
-    "chez rue du commerce": "Rue du Commerce"
+    "chez rue du commerce": "Rue du Commerce",
+    "chez galaxus": "Galaxus",
 }
+
+# --- OUTILS PARTAGÉS POUR LE SCRAPING SELENIUM ---
+# Les sites suivis (Avenue de la Brique, Amazon...) bloquent parfois une requête
+# ou font planter la session Selenium de façon ponctuelle (timeout, popup
+# inattendue, page qui met du temps à charger). Ces deux fonctions sont
+# utilisées par avenue_scraper.py et catch_lego_price.py pour retenter une
+# fois avant d'abandonner, plutôt que de perdre toute une journée de données
+# sur un aléa transitoire.
+
+def driver_est_vivant(driver):
+    """Vérifie qu'une session Selenium est toujours utilisable (le driver peut
+    planter en cours de route sur un runner CI, sans forcément lever d'exception
+    visible côté scraper individuel)."""
+    try:
+        _ = driver.current_url
+        return True
+    except Exception:
+        return False
+
+
+def executer_avec_retries(action, max_essais=2, pause_secondes=2, on_echec=None):
+    """Exécute `action` (callable sans argument) jusqu'à `max_essais` fois tant
+    qu'elle lève une exception. Retourne (True, None) dès qu'un essai réussit,
+    ou (False, dernière_exception) si tous les essais ont échoué. `on_echec`
+    (optionnel) est appelé entre deux tentatives avec (exception, numéro de
+    tentative), pour laisser l'appelant logger un avertissement intermédiaire."""
+    derniere_exception = None
+    for tentative in range(1, max_essais + 1):
+        try:
+            action()
+            return True, None
+        except Exception as e:
+            derniere_exception = e
+            if tentative < max_essais:
+                if on_echec:
+                    on_echec(e, tentative)
+                time.sleep(pause_secondes)
+    return False, derniere_exception

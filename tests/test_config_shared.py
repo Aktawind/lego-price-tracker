@@ -1,6 +1,7 @@
 from config_shared import (
     construire_slug_wiki, construire_url_wiki_set, email_config_complete,
     PRIX_MOYEN_PAR_COLLECTION, charger_config_email, accord_pluriel,
+    MAP_VENDEURS, driver_est_vivant, executer_avec_retries,
 )
 
 
@@ -54,3 +55,68 @@ def test_accord_pluriel():
     assert accord_pluriel(1) == ''
     assert accord_pluriel(2) == 's'
     assert accord_pluriel(8) == 's'
+
+
+def test_map_vendeurs_suit_galaxus():
+    assert MAP_VENDEURS["chez galaxus"] == "Galaxus"
+
+
+class FakeDriver:
+    def __init__(self, vivant=True):
+        self._vivant = vivant
+
+    @property
+    def current_url(self):
+        if not self._vivant:
+            raise Exception("session invalide")
+        return "https://example.com"
+
+
+def test_driver_est_vivant():
+    assert driver_est_vivant(FakeDriver(vivant=True)) is True
+    assert driver_est_vivant(FakeDriver(vivant=False)) is False
+
+
+def test_executer_avec_retries_reussit_du_premier_coup():
+    appels = []
+    succes, erreur = executer_avec_retries(lambda: appels.append(1), max_essais=3, pause_secondes=0)
+    assert succes is True
+    assert erreur is None
+    assert len(appels) == 1
+
+
+def test_executer_avec_retries_reussit_apres_un_echec():
+    appels = []
+
+    def action():
+        appels.append(1)
+        if len(appels) < 2:
+            raise ValueError("aléa transitoire")
+
+    succes, erreur = executer_avec_retries(action, max_essais=3, pause_secondes=0)
+    assert succes is True
+    assert erreur is None
+    assert len(appels) == 2
+
+
+def test_executer_avec_retries_abandonne_apres_max_essais():
+    def action():
+        raise ValueError("toujours cassé")
+
+    succes, erreur = executer_avec_retries(action, max_essais=2, pause_secondes=0)
+    assert succes is False
+    assert isinstance(erreur, ValueError)
+
+
+def test_executer_avec_retries_appelle_on_echec_entre_les_tentatives():
+    appels_echec = []
+
+    def action():
+        raise ValueError("boom")
+
+    executer_avec_retries(
+        action, max_essais=3, pause_secondes=0,
+        on_echec=lambda e, tentative: appels_echec.append(tentative),
+    )
+    # on_echec n'est appelé qu'entre deux tentatives, jamais après la dernière.
+    assert appels_echec == [1, 2]
