@@ -13,11 +13,8 @@ from config_shared import (
 )
 
 from selenium import webdriver
-from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium_stealth import stealth 
+from selenium_stealth import stealth
 
 import scrapers
 import email_manager
@@ -261,52 +258,32 @@ def verifier_les_prix():
                         logging.info(f"IP non-française ({pays_actuel}) détectée. Forçage de la localisation pour Amazon...")
 
                         def _tenter_forcer_localisation():
+                            # On force la localisation/devise directement via les cookies
+                            # qu'Amazon lit pour ça (lc-acbfr, i18n-prefs), plutôt qu'en
+                            # pilotant le popup de sélection de livraison : ce popup change
+                            # régulièrement d'identifiants, et surtout peut ne jamais
+                            # apparaître du tout si Amazon sert une page différente
+                            # (vérification anti-bot, A/B test...) à une IP de datacenter
+                            # comme celle des runners GitHub Actions — auquel cas TOUTE la
+                            # procédure basée sur des clics UI échoue, alors que les cookies
+                            # sont lus de façon fiable quelle que soit la page affichée.
                             driver.get("https://www.amazon.fr/")
-                            wait = WebDriverWait(driver, 10)
+                            driver.add_cookie({"name": "lc-acbfr", "value": "fr_FR", "domain": ".amazon.fr"})
+                            driver.add_cookie({"name": "i18n-prefs", "value": "EUR", "domain": ".amazon.fr"})
+                            # On recharge pour que la nouvelle préférence de localisation prenne effet.
+                            driver.get("https://www.amazon.fr/")
 
-                            # 1. On gère les cookies sur la page d'accueil AVANT tout le reste
-                            try:
-                                bouton_cookies = wait.until(EC.element_to_be_clickable((By.ID, "sp-cc-accept")))
-                                bouton_cookies.click()
-                                logging.info("  -> Bannière de cookies sur la page d'accueil gérée.")
-                                time.sleep(1) # Petite pause pour laisser la bannière disparaître
-                            except Exception:
-                                logging.info("  -> Pas de bannière de cookies sur la page d'accueil.")
-
-                            # 2. On utilise un sélecteur plus robuste pour le bouton de localisation
-                            #    On cherche un lien ou un div qui a un ID contenant "location"
-                            xpath_localisation = "//*[@id='nav-global-location-popover-link' or @id='glow-ingress-block']"
-                            bouton_localisation = wait.until(
-                                EC.element_to_be_clickable((By.XPATH, xpath_localisation))
-                            )
-                            bouton_localisation.click()
-
-                            # 3. Le reste est inchangé car vos nouveaux extraits HTML le confirment
-                            champ_postal = wait.until(EC.visibility_of_element_located((By.ID, "GLUXZipUpdateInput")))
-                            champ_postal.clear() # On vide le champ au cas où il serait pré-rempli
-                            champ_postal.send_keys("38540")
-
-                            bouton_actualiser_container = wait.until(EC.element_to_be_clickable((By.ID, "GLUXZipUpdate")))
-                            bouton_actualiser_container.click()
-
-                            # 4. On attend que la page se recharge en vérifiant que le code postal est bien mis à jour
-                            wait.until(EC.text_to_be_present_in_element((By.ID, "glow-ingress-line2"), "38540"))
-
-                        # Amazon a parfois un aléa ponctuel (popup, page lente) sur cette
-                        # procédure : un seul essai perdait toutes les vérifications Amazon
-                        # du jour (donc tout l'historique de prix des sets suivis uniquement
-                        # via Amazon, comme LUMI-LUNA) pour un simple raté transitoire.
                         succes, erreur = executer_avec_retries(
                             _tenter_forcer_localisation, max_essais=2, pause_secondes=3,
                             on_echec=lambda e, tentative: logging.warning(
-                                f"Tentative {tentative} de forçage de localisation Amazon échouée, nouvel essai... ({e})"
+                                f"Tentative {tentative} de forçage de localisation Amazon échouée, nouvel essai... ({type(e).__name__}: {e})"
                             ),
                         )
                         if succes:
-                            logging.info("Localisation française pour Amazon forcée avec succès.")
+                            logging.info("Localisation française pour Amazon forcée avec succès (cookies lc-acbfr/i18n-prefs).")
                         else:
                             # Si la localisation échoue malgré la nouvelle tentative, c'est une erreur critique pour Amazon
-                            logging.error(f"La procédure de forçage de localisation pour Amazon a échoué : {erreur}")
+                            logging.error(f"La procédure de forçage de localisation pour Amazon a échoué : {type(erreur).__name__}: {erreur}")
                             driver.quit() # On ferme le driver
                             continue # ON PASSE AU SITE SUIVANT
 
