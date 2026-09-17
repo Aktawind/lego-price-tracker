@@ -13,7 +13,10 @@ from config_shared import (
 )
 
 from selenium import webdriver
+from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from selenium_stealth import stealth
 
 import scrapers
@@ -258,20 +261,53 @@ def verifier_les_prix():
                         logging.info(f"IP non-française ({pays_actuel}) détectée. Forçage de la localisation pour Amazon...")
 
                         def _tenter_forcer_localisation():
-                            # On force la localisation/devise directement via les cookies
-                            # qu'Amazon lit pour ça (lc-acbfr, i18n-prefs), plutôt qu'en
-                            # pilotant le popup de sélection de livraison : ce popup change
-                            # régulièrement d'identifiants, et surtout peut ne jamais
-                            # apparaître du tout si Amazon sert une page différente
-                            # (vérification anti-bot, A/B test...) à une IP de datacenter
-                            # comme celle des runners GitHub Actions — auquel cas TOUTE la
-                            # procédure basée sur des clics UI échoue, alors que les cookies
-                            # sont lus de façon fiable quelle que soit la page affichée.
                             driver.get("https://www.amazon.fr/")
+                            wait_local = WebDriverWait(driver, 10)
+
+                            # 1. La bannière de consentement cookies (RGPD) apparaît sur
+                            #    chaque nouvelle session et bloque le reste de la page tant
+                            #    qu'elle n'est pas fermée (clics suivants interceptés sans
+                            #    erreur visible). Un précédent nettoyage de ce code avait
+                            #    supprimé cette étape par erreur en la confondant avec le
+                            #    forçage de localisation ci-dessous — deux choses distinctes.
+                            try:
+                                bouton_cookies = wait_local.until(EC.element_to_be_clickable((By.ID, "sp-cc-accept")))
+                                bouton_cookies.click()
+                                time.sleep(1)
+                            except Exception:
+                                pass  # Pas de bannière cette fois (ou déjà acceptée) : on continue.
+
+                            # 2. Devise/langue : cookies directs qu'Amazon lit pour ça, fiables
+                            #    et sans dépendance à un élément d'UI qui peut ne jamais
+                            #    apparaître (vérification anti-bot, A/B test...).
                             driver.add_cookie({"name": "lc-acbfr", "value": "fr_FR", "domain": ".amazon.fr"})
                             driver.add_cookie({"name": "i18n-prefs", "value": "EUR", "domain": ".amazon.fr"})
-                            # On recharge pour que la nouvelle préférence de localisation prenne effet.
                             driver.get("https://www.amazon.fr/")
+
+                            # 3. Adresse de livraison : contrairement à la devise/langue,
+                            #    Amazon valide ce changement côté serveur et ça ne peut pas
+                            #    se forcer par un simple cookie fabriqué localement — il faut
+                            #    une vraie interaction avec le popup. Best-effort : si cette
+                            #    étape échoue (bouton introuvable, disposition différente...),
+                            #    on continue quand même avec la devise/langue déjà forcées
+                            #    plutôt que d'abandonner toutes les vérifications Amazon du
+                            #    jour comme avant.
+                            try:
+                                xpath_localisation = "//*[@id='nav-global-location-popover-link' or @id='glow-ingress-block']"
+                                bouton_localisation = wait_local.until(EC.element_to_be_clickable((By.XPATH, xpath_localisation)))
+                                bouton_localisation.click()
+                                champ_postal = wait_local.until(EC.visibility_of_element_located((By.ID, "GLUXZipUpdateInput")))
+                                champ_postal.clear()
+                                champ_postal.send_keys("38540")
+                                bouton_actualiser = wait_local.until(EC.element_to_be_clickable((By.ID, "GLUXZipUpdate")))
+                                bouton_actualiser.click()
+                                wait_local.until(EC.text_to_be_present_in_element((By.ID, "glow-ingress-line2"), "38540"))
+                                logging.info("  -> Adresse de livraison mise à jour vers la France.")
+                            except Exception as e:
+                                logging.warning(
+                                    f"  -> Adresse de livraison non mise à jour ({type(e).__name__}: {e}), "
+                                    "on continue avec la devise/langue forcées uniquement."
+                                )
 
                         succes, erreur = executer_avec_retries(
                             _tenter_forcer_localisation, max_essais=2, pause_secondes=3,

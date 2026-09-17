@@ -55,6 +55,17 @@ def scrape(driver, url):
     try:
         driver.get(url)
 
+        # La bannière de consentement cookies (RGPD) peut réapparaître sur une
+        # page produit fraîchement chargée même si elle a déjà été fermée une
+        # fois ailleurs dans la session, et bloque les clics suivants tant
+        # qu'elle est affichée.
+        try:
+            bouton_cookies = wait.until(EC.element_to_be_clickable((By.ID, "sp-cc-accept")))
+            bouton_cookies.click()
+            time.sleep(1)
+        except Exception:
+            pass
+
         # On gère les popups qui peuvent apparaître sur la page produit elle-même
         try:
             continuer_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[text()='Continuer les achats']")))
