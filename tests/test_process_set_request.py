@@ -10,14 +10,14 @@ def test_parser_formulaire_extrait_les_champs_et_ignore_no_response():
         "### Marque\n\nLEGO\n\n"
         "### ID_Set (référence unique)\n\n10321\n\n"
         "### Nom du set\n\n_No response_\n\n"
-        "### URL Amazon\n\nhttps://www.amazon.fr/dp/XXXX\n\n"
+        "### URL Idealo\n\nhttps://www.idealo.fr/prix/XXXX.html\n\n"
         "### Prix d'alerte (optionnel)\n\n45\n"
     )
     champs = psr.parser_formulaire(body)
     assert champs["Marque"] == "LEGO"
     assert champs["ID_Set (référence unique)"] == "10321"
     assert champs["Nom du set"] == ""
-    assert champs["URL Amazon"] == "https://www.amazon.fr/dp/XXXX"
+    assert champs["URL Idealo"] == "https://www.idealo.fr/prix/XXXX.html"
     assert champs["Prix d'alerte (optionnel)"] == "45"
 
 
@@ -56,7 +56,7 @@ def test_traiter_ajout_set_non_lego_avec_infos_completes(config_vide, monkeypatc
         "ID_Set (référence unique)": "LUMI-1",
         "Nom du set": "Faucon Custom",
         "Image_URL": "https://example.com/img.png",
-        "URL Amazon": "https://www.amazon.fr/dp/YYYY",
+        "URL Idealo": "https://www.idealo.fr/prix/YYYY.html",
         "Prix d'alerte (optionnel)": "89.90",
     }
     resultat = psr.traiter_ajout(champs)
@@ -67,7 +67,7 @@ def test_traiter_ajout_set_non_lego_avec_infos_completes(config_vide, monkeypatc
     ligne = df[df['ID_Set'] == 'LUMI-1'].iloc[0]
     assert ligne['Marque'] == 'Lumibricks'
     assert ligne['Nom_Set'] == 'Faucon Custom'
-    assert ligne['URL_Amazon'] == 'https://www.amazon.fr/dp/YYYY'
+    assert ligne['URL_Idealo'] == 'https://www.idealo.fr/prix/YYYY.html'
     assert float(ligne['Prix_Alerte']) == 89.90
     assert any("ajouté au suivi" in c for c in commentaires)
 
@@ -239,6 +239,21 @@ def test_traiter_modification_change_la_collection(config_vide):
     assert resultat is True
     df_apres = pd.read_excel(fichier, dtype=str)
     assert df_apres[df_apres['ID_Set'] == '10321'].iloc[0]['Collection'] == 'Technic'
+
+
+def test_traiter_modification_change_url_idealo(config_vide):
+    fichier, commentaires = config_vide
+    df = pd.DataFrame([{"ID_Set": "LUMI-LUNA", "Nom_Set": "Luna Cottage", "Marque": "Lumibricks"}])
+    df.to_excel(fichier, index=False)
+
+    resultat = psr.traiter_modification({
+        "Set à modifier": "LUMI-LUNA — Luna Cottage",
+        "URL Idealo (laisser vide = ne pas changer)": "https://www.idealo.fr/prix/12345.html",
+    })
+    assert resultat is True
+    df_apres = pd.read_excel(fichier, dtype=str)
+    assert df_apres[df_apres['ID_Set'] == 'LUMI-LUNA'].iloc[0]['URL_Idealo'] == 'https://www.idealo.fr/prix/12345.html'
+    assert any("mis à jour" in c for c in commentaires)
 
 
 def test_traiter_modification_ne_pas_modifier_laisse_intact(config_vide):

@@ -1,11 +1,33 @@
 import json
 import logging
 import re
+import time
+from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
+
+
+def _sauvegarder_diagnostic(soup, url, driver=None):
+    """Sauvegarde le HTML (et une capture d'écran si on dispose d'un
+    navigateur Selenium) quand aucun prix n'a pu être extrait, pour voir après
+    coup ce que le site a réellement renvoyé (page de blocage anti-bot, mise
+    en page différente...) sans accès direct au site depuis l'environnement de
+    dev. Profite à tous les sites utilisant ce scraper (dont Idealo)."""
+    domaine = (urlparse(url).netloc or "site").replace('.', '_').replace(':', '_')
+    prefixe = f"debug_{domaine}_{int(time.time())}"
+    try:
+        with open(f"{prefixe}.html", 'w', encoding='utf-8') as f:
+            f.write(str(soup))
+    except Exception:
+        pass
+    if driver is not None:
+        try:
+            driver.save_screenshot(f"{prefixe}.png")
+        except Exception:
+            pass
 
 
 def _extraire_prix_json_ld(soup):
@@ -91,6 +113,7 @@ def scrape(url, selecteur, headers=None, driver=None):
         else:
             logging.warning(f"  -> Aucune donnée JSON-LD trouvée sur {url}.")
 
+        _sauvegarder_diagnostic(soup, url, driver=driver)
         return None
 
     except Exception as e:

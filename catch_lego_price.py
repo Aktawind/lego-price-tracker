@@ -4,7 +4,6 @@ import time
 import urllib3
 import os
 import logging
-import requests
 import json
 from config_shared import (
     PRIX_MOYEN_PAR_COLLECTION, SEUIL_BONNE_AFFAIRE, SEUIL_TRES_BONNE_AFFAIRE,
@@ -13,10 +12,7 @@ from config_shared import (
 )
 
 from selenium import webdriver
-from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from selenium_stealth import stealth
 
 import scrapers
@@ -27,13 +23,21 @@ import historique_db
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CONFIG_SITES = {
-    "Amazon": { "type": "amazon", "use_selenium": True },
     # Lego.com bloque les requêtes HTTP "brutes" (403 Forbidden) : on passe par un
     # vrai navigateur Selenium, comme pour les autres sites protégés par un anti-bot.
     "Lego": { "type": "standard", "selecteur": '[data-test="product-price"]', "use_selenium": True },
     "Auchan": { "type": "standard", "selecteur": ".product-price", "use_selenium": False },
     "Leclerc": { "type": "standard", "selecteur": ".egToM .visually-hidden", "use_selenium": False },
     "Carrefour": { "type": "carrefour", "selecteur": { "euros": ".product-price__content.c-text--size-m", "centimes": ".product-price__content.c-text--size-s" }, "use_selenium": True },
+    # Idealo agrège les offres de nombreux marchands (dont des vendeurs tiers
+    # Amazon) sans les barrages anti-bot d'Amazon lui-même : utilisé pour les
+    # sets non-LEGO (ex: Lumibricks) après plusieurs échecs répétés du
+    # scraping direct d'Amazon depuis les runners GitHub Actions (IP de
+    # datacenter systématiquement bloquée par leur détection anti-bot).
+    # Sélecteur CSS à ajuster si besoin : le repli JSON-LD (schema.org, que la
+    # plupart des comparateurs de prix exposent pour le référencement) est la
+    # protection principale si ce sélecteur ne correspond plus à la page.
+    "Idealo": { "type": "standard", "selecteur": ".oopStage-price", "use_selenium": False },
     # Ajoutez d'autres sites ici au besoin
 }
 FICHIER_CONFIG_EXCEL = 'config_sets.xlsx'
@@ -142,38 +146,6 @@ def analyser_record_prix(df_set_historique_precedent, nouveau_prix, fenetre_rece
         return f"📉 Plus bas prix des {mois} derniers mois !", False, True
     return None, False, False
 
-def obtenir_localisation_ip():
-    """
-    Interroge le service ipinfo.io pour connaître le code pays de l'adresse IP actuelle.
-    Retourne le code pays (ex: 'FR', 'US', 'IE') ou None en cas d'erreur.
-    """
-    try:
-        logging.info("Récupération de la localisation de l'IP...")
-        
-        # On fait un appel à l'API de ipinfo.io qui renvoie du JSON
-        reponse = requests.get("https://ipinfo.io/json", timeout=5)
-        
-        # Lève une exception si la requête a échoué (ex: statut 4xx ou 5xx)
-        reponse.raise_for_status()
-        
-        # On convertit la réponse JSON en dictionnaire Python
-        data = reponse.json()
-        
-        # On récupère la valeur de la clé 'country', avec 'N/A' comme valeur par défaut
-        pays = data.get('country', 'N/A')
-        
-        logging.info(f"Localisation détectée : Pays={pays}")
-        return pays
-        
-    except requests.exceptions.RequestException as e:
-        # Gère spécifiquement les erreurs de réseau (timeout, pas de connexion...)
-        logging.error(f"Impossible de contacter le service de localisation IP : {e}")
-        return None
-    except Exception as e:
-        # Gère toutes les autres erreurs possibles (JSON invalide, etc.)
-        logging.error(f"Erreur inattendue lors de la récupération de la localisation de l'IP : {e}")
-        return None
-    
 # --- FONCTION PRINCIPALE ---
 def verifier_les_prix():
     logging.info("Lancement de la vérification des prix")
@@ -230,7 +202,6 @@ def verifier_les_prix():
     taches_manuelles = regrouper_taches_par_site(df_config)
     
     SCRAPERS = {
-        "amazon": scrapers.scrape_amazon,
         "carrefour": scrapers.scrape_carrefour,
         "standard": scrapers.scrape_standard
     }
@@ -255,87 +226,6 @@ def verifier_les_prix():
         if site_config.get("use_selenium", False):
             try:
                 driver = creer_driver_selenium(scraper_type)
-                if scraper_type == "amazon":
-                    pays_actuel = obtenir_localisation_ip()
-                    if pays_actuel and pays_actuel != 'FR':
-                        logging.info(f"IP non-française ({pays_actuel}) détectée. Forçage de la localisation pour Amazon...")
-
-                        def _tenter_forcer_localisation():
-                            driver.get("https://www.amazon.fr/")
-                            wait_local = WebDriverWait(driver, 10)
-
-                            # 1. La bannière de consentement cookies (RGPD) apparaît sur
-                            #    chaque nouvelle session et bloque le reste de la page tant
-                            #    qu'elle n'est pas fermée (clics suivants interceptés sans
-                            #    erreur visible). Un précédent nettoyage de ce code avait
-                            #    supprimé cette étape par erreur en la confondant avec le
-                            #    forçage de localisation ci-dessous — deux choses distinctes.
-                            #    On attend sa disparition réelle (pas juste un sleep fixe)
-                            #    avant de continuer : un clic suivi d'une navigation trop
-                            #    rapide peut avoir lieu avant qu'Amazon n'ait enregistré le
-                            #    consentement côté serveur, et la bannière revient alors au
-                            #    chargement suivant (observé sur un run précédent : capture
-                            #    de diagnostic montrant la bannière toujours là après le
-                            #    rechargement qui suivait le clic).
-                            try:
-                                bouton_cookies = wait_local.until(EC.element_to_be_clickable((By.ID, "sp-cc-accept")))
-                                bouton_cookies.click()
-                                wait_local.until(EC.invisibility_of_element_located((By.ID, "sp-cc-accept")))
-                            except Exception:
-                                pass  # Pas de bannière cette fois (ou déjà acceptée) : on continue.
-
-                            # 2. Devise/langue : cookies directs qu'Amazon lit pour ça, fiables
-                            #    et sans dépendance à un élément d'UI qui peut ne jamais
-                            #    apparaître (vérification anti-bot, A/B test...). Pas de
-                            #    rechargement ici : il est inutile (les cookies s'appliquent
-                            #    à la prochaine requête de toute façon) et risquerait de
-                            #    redéclencher la bannière ci-dessus avant que le consentement
-                            #    ne soit vraiment pris en compte.
-                            driver.add_cookie({"name": "lc-acbfr", "value": "fr_FR", "domain": ".amazon.fr"})
-                            driver.add_cookie({"name": "i18n-prefs", "value": "EUR", "domain": ".amazon.fr"})
-
-                            # 3. Adresse de livraison : contrairement à la devise/langue,
-                            #    Amazon valide ce changement côté serveur et ça ne peut pas
-                            #    se forcer par un simple cookie fabriqué localement — il faut
-                            #    une vraie interaction avec le popup. Best-effort : si cette
-                            #    étape échoue (bouton introuvable, disposition différente...),
-                            #    on continue quand même avec la devise/langue déjà forcées
-                            #    plutôt que d'abandonner toutes les vérifications Amazon du
-                            #    jour comme avant.
-                            try:
-                                xpath_localisation = "//*[@id='nav-global-location-popover-link' or @id='glow-ingress-block']"
-                                bouton_localisation = wait_local.until(EC.element_to_be_clickable((By.XPATH, xpath_localisation)))
-                                bouton_localisation.click()
-                                champ_postal = wait_local.until(EC.visibility_of_element_located((By.ID, "GLUXZipUpdateInput")))
-                                champ_postal.clear()
-                                champ_postal.send_keys("38540")
-                                bouton_actualiser = wait_local.until(EC.element_to_be_clickable((By.ID, "GLUXZipUpdate")))
-                                bouton_actualiser.click()
-                                wait_local.until(EC.text_to_be_present_in_element((By.ID, "glow-ingress-line2"), "38540"))
-                                logging.info("  -> Adresse de livraison mise à jour vers la France.")
-                            except Exception as e:
-                                logging.warning(
-                                    f"  -> Adresse de livraison non mise à jour ({type(e).__name__}: {e}), "
-                                    "on continue avec la devise/langue forcées uniquement."
-                                )
-
-                        succes, erreur = executer_avec_retries(
-                            _tenter_forcer_localisation, max_essais=2, pause_secondes=3,
-                            on_echec=lambda e, tentative: logging.warning(
-                                f"Tentative {tentative} de forçage de localisation Amazon échouée, nouvel essai... ({type(e).__name__}: {e})"
-                            ),
-                        )
-                        if succes:
-                            logging.info("Localisation française pour Amazon forcée avec succès (cookies lc-acbfr/i18n-prefs).")
-                        else:
-                            # Si la localisation échoue malgré la nouvelle tentative, c'est une erreur critique pour Amazon
-                            logging.error(f"La procédure de forçage de localisation pour Amazon a échoué : {type(erreur).__name__}: {erreur}")
-                            driver.quit() # On ferme le driver
-                            continue # ON PASSE AU SITE SUIVANT
-
-                    else:
-                        logging.info("IP française (ou non détectée), pas de forçage nécessaire pour Amazon.")
-
             except Exception as e:
                 logging.error(f"Impossible de démarrer/préparer Selenium pour {site}: {e}")
                 if driver: driver.quit()

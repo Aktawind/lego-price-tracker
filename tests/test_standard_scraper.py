@@ -69,14 +69,16 @@ def test_scrape_retombe_sur_json_ld_si_selecteur_absent(monkeypatch):
     assert prix == 209.99
 
 
-def test_scrape_retourne_none_si_rien_ne_marche(monkeypatch):
+def test_scrape_retourne_none_si_rien_ne_marche(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)  # scrape() écrit un fichier de diagnostic dans le cwd
     html = '<html><body><p>Aucun prix ici</p></body></html>'
     monkeypatch.setattr(standard_scraper.requests, 'get', lambda *a, **k: FausseReponse(html))
     prix = standard_scraper.scrape('https://example.com', '.prix', headers={})
     assert prix is None
 
 
-def test_scrape_log_distingue_json_ld_absent_de_json_ld_sans_prix(monkeypatch, caplog):
+def test_scrape_log_distingue_json_ld_absent_de_json_ld_sans_prix(monkeypatch, caplog, tmp_path):
+    monkeypatch.chdir(tmp_path)  # scrape() écrit un fichier de diagnostic dans le cwd
     # Diagnostic utile pour un futur échec sans accès direct au site : on veut
     # pouvoir distinguer "page bloquée / pas de JSON-LD" de "JSON-LD présent
     # mais sans champ prix exploitable" (ex: rupture de stock).
@@ -92,3 +94,14 @@ def test_scrape_log_distingue_json_ld_absent_de_json_ld_sans_prix(monkeypatch, c
     with caplog.at_level('WARNING'):
         standard_scraper.scrape('https://example.com', '.prix', headers={})
     assert "présentes" in caplog.text or "présent" in caplog.text
+
+
+def test_scrape_sauvegarde_un_diagnostic_nomme_par_domaine_en_cas_echec(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    html = '<html><body><p>Aucun prix ici</p></body></html>'
+    monkeypatch.setattr(standard_scraper.requests, 'get', lambda *a, **k: FausseReponse(html))
+    standard_scraper.scrape('https://www.idealo.fr/prix/12345.html', '.prix', headers={})
+
+    fichiers = list(tmp_path.glob('debug_www_idealo_fr_*.html'))
+    assert len(fichiers) == 1
+    assert 'Aucun prix ici' in fichiers[0].read_text(encoding='utf-8')

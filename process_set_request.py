@@ -49,11 +49,11 @@ def resoudre_collection(champs, valeur_scrapee):
 
 URLS_PAR_CHAMP = {
     "URL Lego.com": "URL_Lego",
-    "URL Amazon": "URL_Amazon",
     "URL Auchan": "URL_Auchan",
     "URL Leclerc": "URL_Leclerc",
     "URL Carrefour": "URL_Carrefour",
     "URL Avenue de la Brique": "URL_AvenueDeLaBrique",
+    "URL Idealo": "URL_Idealo",
 }
 
 
@@ -185,7 +185,7 @@ MOT_CLE_SUPPRESSION_SEUIL = "aucun"
 
 def traiter_modification(champs):
     df_config = charger_config()
-    for col in ("Marque", "Prix_Alerte"):
+    for col in ("Marque", "Prix_Alerte", "URL_Idealo"):
         if col not in df_config.columns:
             df_config[col] = None
 
@@ -223,8 +223,12 @@ def traiter_modification(champs):
         else:
             changements['Collection'] = choix_collection
 
+    url_idealo = (champs.get("URL Idealo (laisser vide = ne pas changer)") or "").strip()
+    if url_idealo:
+        changements['URL_Idealo'] = url_idealo
+
     if not changements:
-        commenter_issue("⚠️ Rien à modifier : remplis au moins le prix d'alerte ou la collection.")
+        commenter_issue("⚠️ Rien à modifier : remplis au moins le prix d'alerte, la collection ou l'URL Idealo.")
         return False
 
     for colonne, valeur in changements.items():

@@ -16,19 +16,6 @@ import historique_db
 from generer_formulaires import mettre_a_jour_dropdowns_sets
 
 FICHIER_CONFIG_EXCEL = "config_sets.xlsx"
-
-# Dictionnaire pour mapper les domaines aux noms de colonnes dans l'Excel
-DOMAIN_TO_COLUMN_MAP = {
-    "avenuedelabrique.com": "URL_AvenueDeLaBrique",
-    "amazon.fr": "URL_Amazon",
-    "amzn.eu": "URL_Amazon",
-    "lego.com": "URL_Lego",
-    "auchan.fr": "URL_Auchan",
-    "carrefour.fr": "URL_Carrefour",
-    "e.leclerc": "URL_Leclerc",
-    "brickmo.com": "URL_Brickmo"
-    # Ajoutez d'autres domaines au besoin
-}
 def champ_manquant(valeur):
     """Un champ de config est considéré manquant s'il est NaN, vide, ou vaut
     explicitement 'N/A' (valeur posée quand le scraping Lego.com a échoué)."""
@@ -206,47 +193,6 @@ def get_lego_metadata(set_id):
         return None
     finally:
         driver.quit()
-
-def process_set_file(file_path):
-    """Traite un fichier .txt pour ajouter/mettre à jour un set dans la configuration."""
-    set_id = os.path.splitext(os.path.basename(file_path))[0]
-    logging.info(f"--- Traitement du fichier pour le nouveau set ID: {set_id} ---")
-
-    # Lire les URL depuis le fichier
-    with open(file_path, 'r', encoding='utf-8') as f:
-        urls = [line.strip() for line in f if line.strip()]
-    
-    # Scraper les métadonnées depuis Lego.com
-    metadata = get_lego_metadata(set_id)
-    if not metadata:
-        logging.error(f"Arrêt du traitement pour {set_id} car les métadonnées n'ont pas pu être récupérées.")
-        return
-
-    # Préparer la nouvelle ligne pour l'Excel
-    nouvelle_ligne = {
-        "ID_Set": set_id,
-        "Nom_Set": metadata['nom'],
-        "nbPieces": metadata['nb_pieces'],
-        "Collection": metadata['collection'],
-        "Image_URL": metadata['image_url'],
-        "Marque": "LEGO",
-    }
-    
-    # Ajouter l'URL de Lego.com à la liste
-    urls.append(metadata['url_lego'])
-
-    # Identifier et classer les URL
-    for url in urls:
-        url_trouvee = False
-        for domain, column_name in DOMAIN_TO_COLUMN_MAP.items():
-            if domain in url:
-                nouvelle_ligne[column_name] = url
-                url_trouvee = True
-                break
-        if not url_trouvee:
-            logging.warning(f"Domaine non reconnu pour l'URL : {url}")
-    
-    return nouvelle_ligne
 
 def main():
     logging.info("Lancement du générateur de configuration...")
