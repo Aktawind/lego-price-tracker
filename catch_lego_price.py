@@ -270,19 +270,29 @@ def verifier_les_prix():
                             #    erreur visible). Un précédent nettoyage de ce code avait
                             #    supprimé cette étape par erreur en la confondant avec le
                             #    forçage de localisation ci-dessous — deux choses distinctes.
+                            #    On attend sa disparition réelle (pas juste un sleep fixe)
+                            #    avant de continuer : un clic suivi d'une navigation trop
+                            #    rapide peut avoir lieu avant qu'Amazon n'ait enregistré le
+                            #    consentement côté serveur, et la bannière revient alors au
+                            #    chargement suivant (observé sur un run précédent : capture
+                            #    de diagnostic montrant la bannière toujours là après le
+                            #    rechargement qui suivait le clic).
                             try:
                                 bouton_cookies = wait_local.until(EC.element_to_be_clickable((By.ID, "sp-cc-accept")))
                                 bouton_cookies.click()
-                                time.sleep(1)
+                                wait_local.until(EC.invisibility_of_element_located((By.ID, "sp-cc-accept")))
                             except Exception:
                                 pass  # Pas de bannière cette fois (ou déjà acceptée) : on continue.
 
                             # 2. Devise/langue : cookies directs qu'Amazon lit pour ça, fiables
                             #    et sans dépendance à un élément d'UI qui peut ne jamais
-                            #    apparaître (vérification anti-bot, A/B test...).
+                            #    apparaître (vérification anti-bot, A/B test...). Pas de
+                            #    rechargement ici : il est inutile (les cookies s'appliquent
+                            #    à la prochaine requête de toute façon) et risquerait de
+                            #    redéclencher la bannière ci-dessus avant que le consentement
+                            #    ne soit vraiment pris en compte.
                             driver.add_cookie({"name": "lc-acbfr", "value": "fr_FR", "domain": ".amazon.fr"})
                             driver.add_cookie({"name": "i18n-prefs", "value": "EUR", "domain": ".amazon.fr"})
-                            driver.get("https://www.amazon.fr/")
 
                             # 3. Adresse de livraison : contrairement à la devise/langue,
                             #    Amazon valide ce changement côté serveur et ça ne peut pas

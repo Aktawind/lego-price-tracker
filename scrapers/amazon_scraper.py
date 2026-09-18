@@ -62,7 +62,7 @@ def scrape(driver, url):
         try:
             bouton_cookies = wait.until(EC.element_to_be_clickable((By.ID, "sp-cc-accept")))
             bouton_cookies.click()
-            time.sleep(1)
+            wait.until(EC.invisibility_of_element_located((By.ID, "sp-cc-accept")))
         except Exception:
             pass
 
