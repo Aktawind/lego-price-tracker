@@ -12,8 +12,8 @@ body:
         le menu déroulant ci-dessous — la détection automatique sur Lego.com n'est pas
         fiable (le design du site change trop souvent), donc autant la préciser toi-même.
 
-        Pour une **autre marque** (ex: Lumibricks), remplis aussi le nom, l'image et le
-        lien Amazon à la main, car il n'y a pas de fiche Lego.com à consulter.
+        Pour une **autre marque** (ex: Lumibricks), remplis aussi le nom, l'image et un
+        lien Idealo à la main, car il n'y a pas de fiche Lego.com à consulter.
 
   - type: dropdown
     id: marque
@@ -107,10 +107,10 @@ body:
       required: false
 
   - type: input
-    id: url_amazon
+    id: url_idealo
     attributes:
-      label: "URL Amazon"
-      description: "Recommandé pour les marques hors LEGO (Lumibricks, etc.)."
+      label: "URL Idealo"
+      description: "Recommandé pour les marques hors LEGO (Lumibricks, etc.) : cherche le produit sur idealo.fr et colle le lien de sa fiche."
     validations:
       required: false
 

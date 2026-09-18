@@ -11,7 +11,9 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import TimeoutException
 from config_shared import MAP_VENDEURS, driver_est_vivant, executer_avec_retries
+from config_generator import marque_est_lego
 
 # --- CONFIGURATION ---
 FICHIER_CONFIG_EXCEL = "config_sets.xlsx"
@@ -60,6 +62,16 @@ def _creer_driver():
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--window-size=1920,1080")
+    # --disable-dev-shm-usage : /dev/shm est minuscule (souvent 64 Mo) dans les
+    # conteneurs CI comme les runners GitHub Actions, et Chrome s'en sert
+    # beaucoup pour le rendu. Sans cette option, le processus de rendu peut
+    # planter sans message exploitable (juste une pile d'adresses brutes,
+    # exactement ce qu'on observait sur certains sets) dès qu'une page un peu
+    # lourde (beaucoup d'offres/images) est chargée. catch_lego_price.py
+    # l'utilise déjà pour la même raison.
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
     return webdriver.Chrome(options=options)
 
 
@@ -79,6 +91,14 @@ def main():
     for index, row in df_config.iterrows():
         set_id = row['ID_Set']
         url_avenue_specifique = row.get('URL_AvenueDeLaBrique')
+
+        # Avenue de la Brique est un comparateur de prix spécifiquement LEGO :
+        # une recherche pour un set d'une autre marque (ex: LUMI-LUNA/Lumibricks)
+        # ne trouvera jamais de résultat. Avant, ça produisait un échec garanti
+        # (timeout) à chaque run, en plus de gaspiller du temps pour rien.
+        if not marque_est_lego(row.get('Marque')) and not url_avenue_specifique:
+            logging.info(f"Set {set_id} ignoré (marque non-LEGO, non répertorié sur Avenue de la Brique).")
+            continue
 
         def _tenter_un_set():
             nonlocal driver, wait
@@ -106,8 +126,17 @@ def main():
                 champ_recherche.send_keys(set_id)
                 champ_recherche.send_keys(Keys.RETURN)
 
-            # Attente commune pour les deux cas
-            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.prodf-comp-px")))
+            # Attente commune pour les deux cas. Un timeout ici signifie le plus
+            # souvent que la recherche n'a simplement donné aucun résultat (page
+            # différente, set introuvable ce jour-là) : ce n'est pas une erreur à
+            # proprement parler, donc pas la peine de retenter ni de logger une
+            # pile d'appels illisible pour ça.
+            try:
+                wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.prodf-comp-px")))
+            except TimeoutException:
+                logging.info(f"Aucune offre trouvée pour le set {set_id} sur Avenue de la Brique.")
+                return
+
             soup = BeautifulSoup(driver.page_source, 'html.parser')
 
             # On appelle notre extracteur unique
@@ -115,17 +144,17 @@ def main():
             if offres:
                 deals_par_set[set_id] = offres
 
-        # Un aléa ponctuel (timeout, popup, page lente) sur un set ne doit pas
-        # faire perdre sa mise à jour de prix du jour : on retente une fois
-        # avant d'abandonner (et on redémarre le driver s'il a planté).
+        # Un aléa ponctuel (popup, page lente, session qui plante) sur un set ne
+        # doit pas faire perdre sa mise à jour de prix du jour : on retente une
+        # fois avant d'abandonner (et on redémarre le driver s'il a planté).
         succes, erreur = executer_avec_retries(
             _tenter_un_set, max_essais=2, pause_secondes=3,
             on_echec=lambda e, tentative: logging.warning(
-                f"Tentative {tentative} échouée pour le set {set_id}, nouvel essai... ({e})"
+                f"Tentative {tentative} échouée pour le set {set_id}, nouvel essai... ({type(e).__name__}: {e})"
             ),
         )
         if not succes:
-            logging.error(f"Erreur lors du traitement du set {set_id} sur Avenue de la Brique : {erreur}")
+            logging.error(f"Erreur lors du traitement du set {set_id} sur Avenue de la Brique : {type(erreur).__name__}: {erreur}")
 
         time.sleep(3)
 

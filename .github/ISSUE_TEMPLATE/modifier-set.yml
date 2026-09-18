@@ -75,3 +75,10 @@ body:
     placeholder: 'ex: Ninjago'
   validations:
     required: false
+- type: input
+  id: url_idealo
+  attributes:
+    label: URL Idealo (laisser vide = ne pas changer)
+    description: 'Pour les marques hors LEGO (Lumibricks, etc.) suivies via Idealo plutôt que via Avenue de la Brique.'
+  validations:
+    required: false
