@@ -58,22 +58,26 @@ def test_egalite_avec_le_minimum_compte_comme_record():
     assert recent is True
 
 
-def test_notification_autorisee_sans_seuil_configure():
-    # Comportement historique : pas de seuil = alerte dès la moindre baisse.
-    assert notification_autorisee_par_seuil(49.0, None) is True
-    assert notification_autorisee_par_seuil(0.01, None) is True
+def test_notification_sans_seuil_configure_necessite_une_bonne_affaire():
+    # Sans seuil configuré, on ne notifie plus sur n'importe quelle micro-baisse :
+    # il faut au moins une "bonne affaire" (voir SEUIL_BONNE_AFFAIRE).
+    assert notification_autorisee_par_seuil(49.0, None, "standard") is False
+    assert notification_autorisee_par_seuil(49.0, None, "bonne") is True
+    assert notification_autorisee_par_seuil(49.0, None, "tres_bonne") is True
 
 
 def test_notification_bloquee_si_prix_encore_au_dessus_du_seuil():
     # Cas concret signalé par l'utilisateur : la Corvette qui passe de 50€ à 49€
-    # n'a pas d'intérêt si le seuil configuré est plus bas, ex: 45€.
-    assert notification_autorisee_par_seuil(49.0, 45.0) is False
+    # n'a pas d'intérêt si le seuil configuré est plus bas, ex: 45€. Un seuil
+    # explicite prime toujours sur l'analyse "bonne affaire".
+    assert notification_autorisee_par_seuil(49.0, 45.0, "standard") is False
+    assert notification_autorisee_par_seuil(49.0, 45.0, "tres_bonne") is False
 
 
 def test_notification_autorisee_si_prix_sous_le_seuil():
-    assert notification_autorisee_par_seuil(44.99, 45.0) is True
+    assert notification_autorisee_par_seuil(44.99, 45.0, "standard") is True
 
 
 def test_notification_autorisee_si_prix_egal_au_seuil():
     # Le seuil est inclusif : "sous 45€" doit couvrir "à 45€ pile".
-    assert notification_autorisee_par_seuil(45.0, 45.0) is True
+    assert notification_autorisee_par_seuil(45.0, 45.0, "standard") is True
