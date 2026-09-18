@@ -36,13 +36,13 @@ CONFIG_SITES = {
     # datacenter systématiquement bloquée par leur détection anti-bot).
     # Pour un article n'ayant qu'un seul vendeur (cas des marques peu
     # distribuées comme Lumibricks), Idealo n'a pas de fiche produit dédiée :
-    # l'URL utilisée est la page de résultats de recherche elle-même. Sélecteur
-    # CSS = simple estimation (pas d'accès direct au site pour le vérifier) ;
-    # le repli JSON-LD (schema.org, exposé par la plupart des comparateurs
-    # pour le référencement) est la vraie protection. use_selenium=True par
-    # précaution : une page de résultats de recherche est plus susceptible
-    # d'être rendue dynamiquement en JS qu'une fiche produit statique.
-    "Idealo": { "type": "standard", "selecteur": ".sr-resultItem__price", "use_selenium": True },
+    # l'URL utilisée est la page de résultats de recherche elle-même, qui
+    # n'expose pas de données JSON-LD (vérifié via le diagnostic capturé sur
+    # un premier échec) -- le sélecteur CSS est ici la seule protection.
+    # Idealo génère ses classes CSS avec un suffixe de hash qui change à
+    # chaque déploiement (ex: 'sr-detailedPriceInfo__price_sYVmx') : on
+    # matche uniquement le préfixe stable, insensible à ce suffixe.
+    "Idealo": { "type": "standard", "selecteur": 'div[class^="sr-detailedPriceInfo__price_"]', "use_selenium": True },
     # Ajoutez d'autres sites ici au besoin
 }
 FICHIER_CONFIG_EXCEL = 'config_sets.xlsx'

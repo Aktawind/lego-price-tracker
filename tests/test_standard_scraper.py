@@ -69,6 +69,24 @@ def test_scrape_retombe_sur_json_ld_si_selecteur_absent(monkeypatch):
     assert prix == 209.99
 
 
+def test_scrape_selecteur_prefixe_ignore_le_suffixe_de_hash_css(monkeypatch):
+    # Idealo (et d'autres sites basés sur des CSS modules) génère un suffixe
+    # de hash qui change à chaque déploiement (ex: sr-detailedPriceInfo__price_sYVmx) :
+    # le sélecteur utilisé en config doit matcher un préfixe stable, insensible
+    # à ce suffixe. Basé sur une page réelle capturée via le diagnostic.
+    html = '''
+    <div class="sr-detailedPriceInfo_ypbTl"><div class="sr-detailedPriceInfo__price_sYVmx">
+    <span></span>139,99 €<span class="sr-detailedPriceInfo__vatIncluded_aJ2yj">TVA incluse</span>
+    </div></div>
+    '''
+    monkeypatch.setattr(standard_scraper.requests, 'get', lambda *a, **k: FausseReponse(html))
+    prix = standard_scraper.scrape(
+        'https://www.idealo.fr/cat/6992/jeux-de-construction.html?q=x',
+        'div[class^="sr-detailedPriceInfo__price_"]', headers={},
+    )
+    assert prix == 139.99
+
+
 def test_scrape_retourne_none_si_rien_ne_marche(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)  # scrape() écrit un fichier de diagnostic dans le cwd
     html = '<html><body><p>Aucun prix ici</p></body></html>'
