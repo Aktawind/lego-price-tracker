@@ -43,13 +43,13 @@
             "prix": 209.99
         },
         {
-            "site": "Fnac",
-            "url": "https://www.avenuedelabrique.com/go/px/106506",
-            "prix": 218.91
-        },
-        {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/131832",
+            "prix": 243.24
+        },
+        {
+            "site": "Fnac",
+            "url": "https://www.avenuedelabrique.com/go/px/106506",
             "prix": 243.24
         }
     ],
@@ -207,7 +207,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/136659",
-            "prix": 129.48
+            "prix": 129.72
         },
         {
             "site": "Rue du Commerce",
@@ -232,6 +232,11 @@
     ],
     "11383": [
         {
+            "site": "Amazon",
+            "url": "https://www.avenuedelabrique.com/go/px/148498",
+            "prix": 98.0
+        },
+        {
             "site": "KidInn",
             "url": "https://www.avenuedelabrique.com/go/px/149011",
             "prix": 98.99
@@ -244,11 +249,6 @@
         {
             "site": "Leclerc",
             "url": "https://www.avenuedelabrique.com/go/px/151020",
-            "prix": 99.0
-        },
-        {
-            "site": "Amazon",
-            "url": "https://www.avenuedelabrique.com/go/px/148498",
             "prix": 99.0
         },
         {
@@ -318,7 +318,7 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/129529",
-            "prix": 233.89
+            "prix": 233.78
         },
         {
             "site": "Cdiscount",
@@ -340,7 +340,7 @@
         {
             "site": "Galaxus",
             "url": "https://www.avenuedelabrique.com/go/px/149613",
-            "prix": 373.01
+            "prix": 363.8
         },
         {
             "site": "Cdiscount",
@@ -350,7 +350,7 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/148681",
-            "prix": 415.01
+            "prix": 419.99
         },
         {
             "site": "Fnac",
