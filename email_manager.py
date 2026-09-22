@@ -137,3 +137,94 @@ def envoyer_email_recapitulatif(baisses_de_prix, email_config):
     if envoye:
         logging.info(f"Email récapitulatif de {nombre_baisses} baisse(s) envoyé !")
     return envoye
+
+
+def _carte_set_newsletter(deal, couleur_categorie, libelle_categorie):
+    nom_set = deal['nom_set']
+    prix_actuel = deal['prix_actuel']
+    pourcentage = deal['pourcentage_reduction']
+    prix_min = deal['prix_min_historique']
+    date_min = deal['date_min_historique']
+    texte_depuis_baisse = deal.get('texte_depuis_baisse')
+    image_url = deal.get('image_url')
+    url_wiki = deal.get('url_wiki', '#')
+
+    date_min_txt = date_min.strftime('%B %Y') if date_min is not None else ''
+    ligne_record = f"Ce set a été le moins cher à {prix_min:.2f}€ en {date_min_txt}."
+    ligne_stabilite = f"Il n'avait pas baissé de prix depuis {texte_depuis_baisse}." if texte_depuis_baisse else ""
+
+    text = (
+        f"--------------------\n"
+        f"{nom_set}\n"
+        f"{prix_actuel:.2f}€ (-{pourcentage}% vs prix Lego.com)\n"
+        f"{ligne_record}\n"
+    )
+    if ligne_stabilite:
+        text += f"{ligne_stabilite}\n"
+    text += f"Fiche détaillée : {url_wiki}\n"
+
+    image_html = (
+        f'<img src="{image_url}" alt="{nom_set}" width="90" style="border-radius:6px; display:block;">'
+        if image_url else
+        '<div style="width:90px; height:90px; background:#eee; border-radius:6px;"></div>'
+    )
+    html = f"""
+    <div style="background:#fff; border-radius:8px; padding:14px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <table role="presentation" width="100%" style="border-collapse:collapse;">
+            <tr>
+                <td width="100" style="vertical-align:top;">{image_html}</td>
+                <td style="vertical-align:top; padding-left:14px;">
+                    <h3 style="margin:0 0 6px 0; font-size:15px;">
+                        <a href="{url_wiki}" style="color:#222; text-decoration:none;">{nom_set}</a>
+                    </h3>
+                    <p style="margin:0 0 6px 0;">
+                        <span style="color:{couleur_categorie}; font-size:1.2em; font-weight:bold;">{prix_actuel:.2f}€</span>
+                        <span style="color:{couleur_categorie}; font-weight:bold;"> (-{pourcentage}%)</span>
+                        <span style="display:inline-block; background:{couleur_categorie}; color:#fff; font-size:10px; font-weight:bold; padding:2px 7px; border-radius:10px; margin-left:6px;">{libelle_categorie}</span>
+                    </p>
+                    <p style="margin:0; color:#666; font-size:12px;">{ligne_record}{f"<br>{ligne_stabilite}" if ligne_stabilite else ""}</p>
+                    <a href="{url_wiki}" style="display:inline-block; margin-top:8px; color:{COULEUR_NEUTRE}; text-decoration:none; font-size:12px;">Historique complet &rarr;</a>
+                </td>
+            </tr>
+        </table>
+    </div>
+    """
+    return text, html
+
+
+def envoyer_newsletter_hebdomadaire(tres_bonnes_affaires, bonnes_affaires, email_config):
+    """Envoie la newsletter hebdomadaire des bonnes affaires : deux sections à la
+    suite (très bonnes affaires, puis bonnes affaires), chacune triée par % de
+    réduction décroissant par rapport au prix Lego.com de référence."""
+
+    nombre_total = len(tres_bonnes_affaires) + len(bonnes_affaires)
+    sujet = f"🗞️ Newsletter LEGO : {nombre_total} bonne{accord_pluriel(nombre_total)} affaire{accord_pluriel(nombre_total)} cette semaine"
+
+    text_body = "Bonjour,\n\nVoici les bonnes affaires de la semaine sur vos sets suivis :\n\n"
+    html_body = """
+    <html><body style="font-family: Arial, Helvetica, sans-serif; background-color:#f4f4f7; margin:0; padding:20px;">
+    <div style="max-width:640px; margin:0 auto;">
+    <h2 style="color:#222;">🗞️ Newsletter hebdomadaire des bonnes affaires</h2>
+    """
+
+    for titre, deals, couleur, libelle in (
+        ("Très bonnes affaires", tres_bonnes_affaires, "#e67e22", "🔥 TRÈS BONNE AFFAIRE"),
+        ("Bonnes affaires", bonnes_affaires, COULEUR_BONNE_AFFAIRE, "✅ BONNE AFFAIRE"),
+    ):
+        if not deals:
+            continue
+        text_body += f"\n=== {titre} ===\n\n"
+        html_body += f'<h3 style="color:#333; margin-top:20px;">{titre}</h3>'
+        for deal in deals:
+            text, html = _carte_set_newsletter(deal, couleur, libelle)
+            text_body += text
+            html_body += html
+
+    lien_wiki = "https://github.com/Aktawind/lego-price-tracker/wiki"
+    text_body += f"\n\nPour une analyse détaillée, consultez votre tableau de bord : {lien_wiki}"
+    html_body += f'<p style="text-align:center; color:#888; font-size:12px;">Consultez le <a href="{lien_wiki}">tableau de bord complet</a>.</p></div></body></html>'
+
+    envoye = envoi_email.envoyer(sujet, text_body, html_body, email_config)
+    if envoye:
+        logging.info(f"Newsletter hebdomadaire envoyée ({nombre_total} bonne(s) affaire(s)) !")
+    return envoye

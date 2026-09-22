@@ -1,0 +1,36 @@
+name: Newsletter hebdomadaire des bonnes affaires
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 06:00 UTC un vendredi = 8h à Paris en heure d'été (CEST, UTC+2) ou 7h en
+    # heure d'hiver (CET, UTC+1) -- comme lego_tracker.yml, le décalage horaire
+    # saisonnier n'est pas géré automatiquement par cron.
+    - cron: '0 6 * * 5'
+
+jobs:
+  newsletter:
+    name: Générer et envoyer la newsletter
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run newsletter generator
+        env:
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          BREVO_FROM_EMAIL: ${{ secrets.BREVO_FROM_EMAIL }}
+          MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE }}
+        run: python generer_newsletter.py
