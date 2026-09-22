@@ -3,6 +3,11 @@ name: Traiter une demande de set (ajout/suppression/modification)
 on:
   issues:
     types: [opened]
+  # Permet de relancer le traitement d'une issue existante (ex: après un échec)
+  # en commentant "/relancer" dessus, plutôt que de devoir la supprimer et la
+  # recréer.
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: write
@@ -24,15 +29,33 @@ jobs:
     name: Traiter le formulaire et mettre à jour la config
     runs-on: ubuntu-latest
     # Sécurité : seuls les propriétaires/membres/collaborateurs du repo peuvent
-    # déclencher une écriture automatique dans le dépôt via une issue.
+    # déclencher une écriture automatique dans le dépôt, que ce soit à
+    # l'ouverture de l'issue ou via un commentaire "/relancer".
     if: >
       (contains(github.event.issue.labels.*.name, 'ajout-set') || contains(github.event.issue.labels.*.name, 'suppression-set') || contains(github.event.issue.labels.*.name, 'modification-set')) &&
-      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association)
+      (
+        (github.event_name == 'issues' && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association)) ||
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/relancer') && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
+      )
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           lfs: true
+
+      # Le traitement peut prendre une minute ou deux (installation, scraping
+      # Selenium...) : un accusé de réception immédiat évite de se demander si
+      # le commentaire "/relancer" a bien été pris en compte.
+      - name: Accuse réception de la relance
+        if: github.event_name == 'issue_comment'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
+            -d '{"body": "🔁 Relance en cours..."}'
 
       - name: Setup Chrome
         uses: browser-actions/setup-chrome@v1
