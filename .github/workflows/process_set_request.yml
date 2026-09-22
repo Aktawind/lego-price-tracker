@@ -77,3 +77,18 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_LABELS: ${{ join(github.event.issue.labels.*.name, ',') }}
         run: python process_set_request.py
+
+      # Si la récupération des infos Lego.com échoue (ex: "Impossible de
+      # récupérer les informations du set..."), un diagnostic (HTML + capture
+      # d'écran de la page réellement chargée) est sauvegardé -- voir
+      # lego_tracker.yml pour le même mécanisme sur le scraping quotidien.
+      # if-no-files-found: ignore -> ne fait pas échouer le run si tout s'est
+      # bien passé (aucun fichier de diagnostic produit).
+      - name: Upload scraping diagnostics (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scraping-diagnostics
+          path: debug_*
+          if-no-files-found: ignore
+          retention-days: 7

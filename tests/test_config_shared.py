@@ -2,6 +2,7 @@ from config_shared import (
     construire_slug_wiki, construire_url_wiki_set, email_config_complete,
     PRIX_MOYEN_PAR_COLLECTION, charger_config_email, accord_pluriel,
     MAP_VENDEURS, driver_est_vivant, executer_avec_retries,
+    sauvegarder_diagnostic_scraping,
 )
 
 
@@ -120,3 +121,38 @@ def test_executer_avec_retries_appelle_on_echec_entre_les_tentatives():
     )
     # on_echec n'est appelé qu'entre deux tentatives, jamais après la dernière.
     assert appels_echec == [1, 2]
+
+
+class FakeDriverAvecScreenshot:
+    def __init__(self):
+        self.captures = []
+
+    def save_screenshot(self, chemin):
+        self.captures.append(chemin)
+
+
+def test_sauvegarder_diagnostic_scraping_nomme_par_domaine(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    sauvegarder_diagnostic_scraping("<html>contenu</html>", "https://www.lego.com/fr-fr/product/72151", prefixe="debug_lego_metadata")
+
+    fichiers = list(tmp_path.glob("debug_lego_metadata_www_lego_com_*.html"))
+    assert len(fichiers) == 1
+    assert fichiers[0].read_text(encoding="utf-8") == "<html>contenu</html>"
+
+
+def test_sauvegarder_diagnostic_scraping_capture_ecran_si_driver_fourni(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    driver = FakeDriverAvecScreenshot()
+    sauvegarder_diagnostic_scraping("<html></html>", "https://example.com/page", driver=driver)
+
+    assert len(driver.captures) == 1
+    assert driver.captures[0].startswith("debug_example_com_")
+    assert driver.captures[0].endswith(".png")
+
+
+def test_sauvegarder_diagnostic_scraping_sans_driver_necrit_pas_de_png(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    sauvegarder_diagnostic_scraping("<html></html>", "https://example.com/page")
+
+    assert list(tmp_path.glob("*.png")) == []
+    assert list(tmp_path.glob("*.html"))

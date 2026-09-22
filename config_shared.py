@@ -1,5 +1,6 @@
 import os
 import time
+from urllib.parse import urlparse
 
 # --- ANALYSE DES PRIX ---
 
@@ -97,6 +98,27 @@ def driver_est_vivant(driver):
         return True
     except Exception:
         return False
+
+
+def sauvegarder_diagnostic_scraping(contenu_html, url, driver=None, prefixe="debug"):
+    """Sauvegarde le HTML (et une capture d'écran si un navigateur Selenium
+    est fourni) d'une page qui n'a pas donné le résultat attendu, nommé
+    d'après le domaine et un horodatage. Permet de diagnostiquer un futur
+    échec de scraping (CAPTCHA, page de blocage, mise en page différente...)
+    sans accès direct au site depuis l'environnement de dev -- utilisé par
+    scrapers/standard_scraper.py et config_generator.py."""
+    domaine = (urlparse(url).netloc or "site").replace('.', '_').replace(':', '_')
+    chemin_base = f"{prefixe}_{domaine}_{int(time.time())}"
+    try:
+        with open(f"{chemin_base}.html", 'w', encoding='utf-8') as f:
+            f.write(contenu_html)
+    except Exception:
+        pass
+    if driver is not None:
+        try:
+            driver.save_screenshot(f"{chemin_base}.png")
+        except Exception:
+            pass
 
 
 def executer_avec_retries(action, max_essais=2, pause_secondes=2, on_echec=None):

@@ -11,9 +11,11 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium_stealth import stealth
 
 import historique_db
 from generer_formulaires import mettre_a_jour_dropdowns_sets
+from config_shared import sauvegarder_diagnostic_scraping
 
 FICHIER_CONFIG_EXCEL = "config_sets.xlsx"
 def champ_manquant(valeur):
@@ -110,11 +112,10 @@ def extraire_collection(soup):
 
 def get_lego_metadata(set_id, url=None):
     """Scrape Lego.com pour récupérer les métadonnées d'un set en utilisant Selenium.
-    L'URL "ID nu" (product/<id>) ne résout pas toujours correctement (ex: sets
-    de licence/collaboration comme les sets Pokémon, où Lego.com attend le
-    slug complet product/<nom>-<id>) : on peut passer une URL précise à
-    utiliser à la place, typiquement celle que l'utilisateur a copiée
-    directement depuis son navigateur."""
+    Accepte une URL précise en override de l'URL "ID nu" (product/<id>)
+    habituellement construite, utile si jamais elle ne résout pas correctement
+    pour un set donné (utilisateur qui colle l'URL copiée depuis son
+    navigateur)."""
     logging.info(f"Récupération des métadonnées pour le set {set_id} sur Lego.com (via Selenium)...")
     url = url or f"https://www.lego.com/fr-fr/product/{set_id}"
 
@@ -129,8 +130,20 @@ def get_lego_metadata(set_id, url=None):
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option('useAutomationExtension', False)
-    
+
     driver = webdriver.Chrome(options=chrome_options)
+    # Lego.com bloque les navigateurs non "furtifs" avec un 403 -- catch_lego_price.py
+    # applique déjà ce mode pour le scraping quotidien des prix, mais il
+    # manquait ici (ajout d'un nouveau set). Sur un set très demandé (ex: une
+    # collaboration exclusive), l'absence de camouflage peut suffire à
+    # déclencher un blocage anti-bot qui ressemble à une simple page introuvable.
+    stealth(driver,
+            languages=["fr-FR", "fr"],
+            vendor="Google Inc.",
+            platform="Win32",
+            webgl_vendor="Intel Inc.",
+            renderer="Intel Iris OpenGL Engine",
+            fix_hairline=True)
     wait = WebDriverWait(driver, 10)
 
     try:
@@ -194,7 +207,11 @@ def get_lego_metadata(set_id, url=None):
         return { "nom": nom_set, "image_url": image_url, "nb_pieces": nb_pieces, "collection": collection, "url_lego": url }
         
     except Exception as e:
-        logging.error(f"Erreur majeure lors de la récupération des métadonnées pour {set_id} : {e}")
+        logging.error(f"Erreur majeure lors de la récupération des métadonnées pour {set_id} : {type(e).__name__}: {e}")
+        try:
+            sauvegarder_diagnostic_scraping(driver.page_source, url, driver=driver, prefixe="debug_lego_metadata")
+        except Exception:
+            pass
         return None
     finally:
         driver.quit()
