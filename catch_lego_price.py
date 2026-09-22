@@ -121,16 +121,16 @@ def creer_driver_selenium(scraper_type="standard"):
     return driver
 
 def notification_autorisee_par_seuil(nouveau_prix, prix_alerte, analyse_affaire):
-    """Une baisse n'est notifiée que si elle est vraiment intéressante :
-    - si un seuil d'alerte a été configuré pour ce set (colonne Prix_Alerte),
-      on notifie dès que le nouveau prix passe sous ce seuil ;
-    - sinon, on ne notifie que si c'est au moins une "bonne affaire" au sens
-      du prix moyen à la pièce (voir SEUIL_BONNE_AFFAIRE), pour ne pas
-      envoyer un email à chaque micro-baisse sans intérêt (ex: 50€ -> 49€)
-      sur un set sans seuil défini."""
-    if prix_alerte is not None:
-        return nouveau_prix <= prix_alerte
-    return analyse_affaire != "standard"
+    """Une baisse n'est notifiée que si elle est vraiment intéressante : sous
+    le seuil personnel (Prix_Alerte) s'il est configuré, OU sous la barre
+    "bonne affaire" calculée à partir du prix moyen à la pièce (voir
+    SEUIL_BONNE_AFFAIRE) -- les deux critères se complètent, remplir l'un ou
+    l'autre suffit à déclencher la notification. Sans seuil personnel
+    configuré, seule la barre bonne affaire compte, pour ne pas envoyer un
+    email à chaque micro-baisse sans intérêt (ex: 50€ -> 49€)."""
+    sous_seuil_personnel = prix_alerte is not None and nouveau_prix <= prix_alerte
+    est_bonne_affaire = analyse_affaire != "standard"
+    return sous_seuil_personnel or est_bonne_affaire
 
 
 def analyser_record_prix(df_set_historique_precedent, nouveau_prix, fenetre_recente_jours=182):
@@ -378,14 +378,15 @@ def verifier_les_prix():
                 logging.warning(f"Infos de config manquantes pour le set {set_id} pour l'analyse.")
 
             # --- On ne notifie que si la baisse est "intéressante" ---
-            # Si un prix cible a été défini pour ce set, on n'alerte que si le nouveau
-            # prix passe sous ce seuil (ex: la Corvette qui passe de 50€ à 49€ n'a pas
-            # d'intérêt si le seuil configuré est 45€). Sinon, on n'alerte que si c'est
-            # au moins une "bonne affaire" (voir analyse_affaire ci-dessus), pour éviter
-            # un email à chaque micro-baisse sur un set sans seuil défini.
+            # On alerte dès que l'UN des deux critères est rempli : le nouveau prix
+            # passe sous le seuil personnel configuré (Prix_Alerte), OU c'est au
+            # moins une "bonne affaire" (voir analyse_affaire ci-dessus) -- même si
+            # ce n'est pas le meilleur prix jamais enregistré. Sans seuil personnel
+            # configuré, seule la bonne affaire compte, pour éviter un email à
+            # chaque micro-baisse sans intérêt (ex: 50€ -> 49€).
             if not notification_autorisee_par_seuil(meilleur_prix_aujourdhui, prix_alerte, analyse_affaire):
                 if prix_alerte is not None:
-                    logging.info(f"Baisse détectée pour le set {set_id} ({meilleur_prix_aujourdhui}€) mais au-dessus du seuil d'alerte configuré ({prix_alerte}€). Pas de notification.")
+                    logging.info(f"Baisse détectée pour le set {set_id} ({meilleur_prix_aujourdhui}€) mais au-dessus du seuil d'alerte configuré ({prix_alerte}€) et ce n'est pas une bonne affaire. Pas de notification.")
                 else:
                     logging.info(f"Baisse détectée pour le set {set_id} ({meilleur_prix_aujourdhui}€) mais ce n'est pas une bonne affaire et aucun seuil d'alerte n'est configuré. Pas de notification.")
                 continue

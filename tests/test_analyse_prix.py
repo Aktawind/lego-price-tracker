@@ -66,12 +66,19 @@ def test_notification_sans_seuil_configure_necessite_une_bonne_affaire():
     assert notification_autorisee_par_seuil(49.0, None, "tres_bonne") is True
 
 
-def test_notification_bloquee_si_prix_encore_au_dessus_du_seuil():
+def test_notification_bloquee_si_prix_encore_au_dessus_du_seuil_et_pas_bonne_affaire():
     # Cas concret signalé par l'utilisateur : la Corvette qui passe de 50€ à 49€
-    # n'a pas d'intérêt si le seuil configuré est plus bas, ex: 45€. Un seuil
-    # explicite prime toujours sur l'analyse "bonne affaire".
+    # n'a pas d'intérêt si le seuil configuré est plus bas, ex: 45€ -- SAUF si
+    # cette baisse est par ailleurs une "bonne affaire" (voir test ci-dessous).
     assert notification_autorisee_par_seuil(49.0, 45.0, "standard") is False
-    assert notification_autorisee_par_seuil(49.0, 45.0, "tres_bonne") is False
+
+
+def test_notification_autorisee_si_bonne_affaire_meme_au_dessus_du_seuil_personnel():
+    # Le seuil personnel (Prix_Alerte) et la "bonne affaire" se complètent : il
+    # suffit que l'un des deux critères soit rempli pour notifier, même si le
+    # prix n'a jamais été aussi bas (ce n'est pas forcément un nouveau record).
+    assert notification_autorisee_par_seuil(49.0, 45.0, "bonne") is True
+    assert notification_autorisee_par_seuil(49.0, 45.0, "tres_bonne") is True
 
 
 def test_notification_autorisee_si_prix_sous_le_seuil():
