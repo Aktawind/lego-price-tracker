@@ -149,7 +149,9 @@ def test_traiter_ajout_set_deja_existant(config_vide):
     df.to_excel(fichier, index=False)
 
     resultat = psr.traiter_ajout({"Marque": "LEGO", "ID_Set (référence unique)": "10321"})
-    assert resultat is False
+    # Pas une erreur : l'état voulu (le set est suivi) est déjà atteint, donc
+    # l'issue doit être fermée (True) plutôt que laissée ouverte indéfiniment.
+    assert resultat is True
     assert any("déjà suivi" in c for c in commentaires)
 
 
@@ -287,5 +289,7 @@ def test_traiter_modification_collection_autre_sans_precision_echoue(config_vide
 def test_traiter_suppression_set_inconnu(config_vide):
     fichier, commentaires = config_vide
     resultat = psr.traiter_suppression({"Set à retirer": "99999"})
-    assert resultat is False
+    # Pas une erreur : l'état voulu (le set n'est plus suivi) est déjà atteint,
+    # donc l'issue doit être fermée (True) plutôt que laissée ouverte.
+    assert resultat is True
     assert any("n'a pas été trouvé" in c for c in commentaires)

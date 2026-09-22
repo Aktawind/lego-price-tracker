@@ -113,8 +113,12 @@ def traiter_ajout(champs):
         return False
 
     if 'ID_Set' in df_config.columns and id_set in df_config['ID_Set'].astype(str).values:
+        # Pas une erreur à proprement parler : l'état voulu (le set est suivi)
+        # est déjà atteint, donc on ferme l'issue plutôt que de la laisser
+        # ouverte indéfiniment (commiter_et_pousser() ne fera rien puisque la
+        # config n'a pas changé, aucun risque à l'appeler ici).
         commenter_issue(f"⚠️ Le set `{id_set}` est déjà suivi, aucune action effectuée.")
-        return False
+        return True
 
     marque = (champs.get("Marque") or "LEGO").strip() or "LEGO"
     est_lego = marque.strip().upper() == "LEGO"
@@ -252,8 +256,11 @@ def traiter_suppression(champs):
     id_set = extraire_id_set(champs.get("Set à retirer"))
 
     if 'ID_Set' not in df_config.columns or id_set not in df_config['ID_Set'].astype(str).values:
+        # Idem que pour un ajout déjà suivi : l'état voulu (le set n'est plus
+        # suivi) est déjà atteint, donc on ferme l'issue plutôt que de la
+        # laisser ouverte.
         commenter_issue(f"⚠️ Le set `{id_set}` n'a pas été trouvé dans le suivi, aucune action effectuée.")
-        return False
+        return True
 
     df_config = df_config[df_config['ID_Set'].astype(str) != id_set]
     df_config.to_excel(FICHIER_CONFIG_EXCEL, index=False)
