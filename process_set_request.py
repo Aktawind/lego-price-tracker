@@ -141,12 +141,19 @@ def traiter_ajout(champs):
             "Marque": nom_marque_affiche,
         }
     else:
-        metadata = get_lego_metadata(id_set)
+        # L'URL "ID nu" (product/<id>) ne résout pas toujours correctement,
+        # notamment pour les sets de licence/collaboration (ex: gamme Pokémon,
+        # où Lego.com attend le slug complet product/<nom>-<id>) : si
+        # l'utilisateur a collé une URL précise dans le formulaire, on
+        # l'utilise en priorité plutôt que de deviner.
+        url_lego_fournie = (champs.get("URL Lego.com") or "").strip() or None
+        metadata = get_lego_metadata(id_set, url_lego_fournie)
         if not metadata:
             commenter_issue(
                 f"❌ Impossible de récupérer les informations du set LEGO `{id_set}` sur Lego.com "
                 "(référence invalide, ou site temporairement bloquant). Tu peux réessayer plus tard, "
-                "ou ajouter le set manuellement en renseignant Nom/Image dans le formulaire."
+                "ou renseigner directement l'URL Lego.com exacte (et/ou ajouter le set manuellement "
+                "en renseignant Nom/Image) dans le formulaire."
             )
             return False, None
         nouvelle_ligne = {

@@ -108,11 +108,16 @@ def extraire_collection(soup):
     return 'N/A', None
 
 
-def get_lego_metadata(set_id):
-    """Scrape Lego.com pour récupérer les métadonnées d'un set en utilisant Selenium."""
+def get_lego_metadata(set_id, url=None):
+    """Scrape Lego.com pour récupérer les métadonnées d'un set en utilisant Selenium.
+    L'URL "ID nu" (product/<id>) ne résout pas toujours correctement (ex: sets
+    de licence/collaboration comme les sets Pokémon, où Lego.com attend le
+    slug complet product/<nom>-<id>) : on peut passer une URL précise à
+    utiliser à la place, typiquement celle que l'utilisateur a copiée
+    directement depuis son navigateur."""
     logging.info(f"Récupération des métadonnées pour le set {set_id} sur Lego.com (via Selenium)...")
-    url = f"https://www.lego.com/fr-fr/product/{set_id}"
-    
+    url = url or f"https://www.lego.com/fr-fr/product/{set_id}"
+
     # On utilise une configuration Selenium
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
@@ -232,7 +237,9 @@ def main():
         if ids_a_reparer:
             logging.info(f"Métadonnées incomplètes détectées pour {len(ids_a_reparer)} set(s), nouvelle tentative de récupération...")
             for index, set_id in ids_a_reparer:
-                metadata = get_lego_metadata(set_id)
+                url_connue = df_config.at[index, 'URL_Lego'] if 'URL_Lego' in df_config.columns else None
+                url_connue = url_connue if pd.notna(url_connue) and str(url_connue).strip() else None
+                metadata = get_lego_metadata(set_id, url_connue)
                 if not metadata:
                     continue
                 if champ_manquant(df_config.at[index, 'Image_URL']) and metadata.get('image_url'):

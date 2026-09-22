@@ -102,7 +102,7 @@ body:
     id: url_lego
     attributes:
       label: "URL Lego.com"
-      description: "Optionnel : uniquement si tu veux forcer une URL précise (sinon auto-détectée pour les sets LEGO)."
+      description: "Optionnel, mais utile si l'ajout échoue avec 'Impossible de récupérer les informations' : colle ici l'URL complète copiée depuis ton navigateur (certains sets, comme les gammes Pokémon, ont besoin du lien exact avec son nom, pas juste le numéro)."
     validations:
       required: false
 

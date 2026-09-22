@@ -78,7 +78,7 @@ def test_traiter_ajout_set_non_lego_avec_infos_completes(config_vide, monkeypatc
 
 def test_traiter_ajout_lego_utilise_get_lego_metadata(config_vide, monkeypatch):
     fichier, commentaires = config_vide
-    monkeypatch.setattr(psr, "get_lego_metadata", lambda set_id: {
+    monkeypatch.setattr(psr, "get_lego_metadata", lambda set_id, url=None: {
         "nom": "Corvette", "nb_pieces": "1210", "collection": "N/A",
         "image_url": "https://lego.com/img.png", "url_lego": "https://lego.com/fr-fr/product/10321",
     })
@@ -93,11 +93,36 @@ def test_traiter_ajout_lego_utilise_get_lego_metadata(config_vide, monkeypatch):
     assert ligne['Marque'] == 'LEGO'
 
 
+def test_traiter_ajout_lego_priorise_lurl_fournie_dans_le_formulaire(config_vide, monkeypatch):
+    # Cas concret signalé par l'utilisateur : l'URL "ID nu" ne résout pas pour
+    # certains sets de licence (ex: gamme Pokémon), qui ont besoin du slug
+    # complet. Si l'utilisateur colle l'URL exacte, elle doit être utilisée à
+    # la place de la reconstruction automatique product/<id>.
+    fichier, commentaires = config_vide
+    urls_recues = []
+
+    def fausse_metadata(set_id, url=None):
+        urls_recues.append(url)
+        return {
+            "nom": "Évoli", "nb_pieces": "313", "collection": "Icons",
+            "image_url": "https://lego.com/img.png", "url_lego": url,
+        }
+
+    monkeypatch.setattr(psr, "get_lego_metadata", fausse_metadata)
+    champs = {
+        "Marque": "LEGO", "ID_Set (référence unique)": "72151",
+        "URL Lego.com": "https://www.lego.com/fr-fr/product/eevee-72151",
+    }
+    resultat, message = psr.traiter_ajout(champs)
+    assert resultat is True
+    assert urls_recues == ["https://www.lego.com/fr-fr/product/eevee-72151"]
+
+
 def test_traiter_ajout_lego_priorise_la_collection_choisie_dans_le_formulaire(config_vide, monkeypatch):
     fichier, commentaires = config_vide
     # La détection automatique renverrait "N/A" ou une valeur non fiable : le
     # formulaire doit toujours avoir le dernier mot quand l'utilisateur a choisi.
-    monkeypatch.setattr(psr, "get_lego_metadata", lambda set_id: {
+    monkeypatch.setattr(psr, "get_lego_metadata", lambda set_id, url=None: {
         "nom": "Corvette", "nb_pieces": "1210", "collection": "N/A",
         "image_url": "https://lego.com/img.png", "url_lego": "https://lego.com/fr-fr/product/10321",
     })
@@ -112,7 +137,7 @@ def test_traiter_ajout_lego_priorise_la_collection_choisie_dans_le_formulaire(co
 
 def test_traiter_ajout_lego_collection_autre_utilise_le_champ_libre(config_vide, monkeypatch):
     fichier, commentaires = config_vide
-    monkeypatch.setattr(psr, "get_lego_metadata", lambda set_id: {
+    monkeypatch.setattr(psr, "get_lego_metadata", lambda set_id, url=None: {
         "nom": "Set Ninjago", "nb_pieces": "500", "collection": "N/A",
         "image_url": "", "url_lego": "https://lego.com/fr-fr/product/10321",
     })
@@ -128,7 +153,7 @@ def test_traiter_ajout_lego_collection_autre_utilise_le_champ_libre(config_vide,
 
 def test_traiter_ajout_lego_auto_retombe_sur_la_valeur_scrapee(config_vide, monkeypatch):
     fichier, commentaires = config_vide
-    monkeypatch.setattr(psr, "get_lego_metadata", lambda set_id: {
+    monkeypatch.setattr(psr, "get_lego_metadata", lambda set_id, url=None: {
         "nom": "Corvette", "nb_pieces": "1210", "collection": "Icons",
         "image_url": "", "url_lego": "https://lego.com/fr-fr/product/10321",
     })
@@ -318,7 +343,7 @@ def test_main_ne_poste_pas_de_succes_si_lenregistrement_echoue(config_vide, monk
     body = "### Marque\n\nLEGO\n\n### ID_Set (référence unique)\n\n10321\n\n"
     monkeypatch.setattr(psr, "ISSUE_BODY", body)
     monkeypatch.setattr(psr, "ISSUE_LABELS", "ajout-set")
-    monkeypatch.setattr(psr, "get_lego_metadata", lambda set_id: {
+    monkeypatch.setattr(psr, "get_lego_metadata", lambda set_id, url=None: {
         "nom": "Corvette", "nb_pieces": "1210", "collection": "Icons",
         "image_url": "https://lego.com/img.png", "url_lego": "https://lego.com/fr-fr/product/10321",
     })
