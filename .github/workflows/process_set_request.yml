@@ -8,6 +8,17 @@ permissions:
   contents: write
   issues: write
 
+# Sans ça, soumettre plusieurs issues à la suite lance plusieurs runs de ce
+# workflow EN PARALLÈLE : chacun part du même commit, et le second à pousser
+# se fait rejeter par git (le premier a déjà fait avancer main entre-temps),
+# ce qui fait planter le script et perd silencieusement le changement de cette
+# issue (elle reste commentée "ajouté" mais jamais réellement enregistrée).
+# Avec ce groupe de concurrence, les runs sont mis en file et exécutés un par
+# un au lieu de se faire concurrence sur le même push.
+concurrency:
+  group: process-set-request
+  cancel-in-progress: false
+
 jobs:
   process:
     name: Traiter le formulaire et mettre à jour la config

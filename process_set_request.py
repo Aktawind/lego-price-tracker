@@ -12,6 +12,7 @@ import pandas as pd
 import requests
 
 from config_generator import get_lego_metadata, FICHIER_CONFIG_EXCEL
+from config_shared import executer_avec_retries
 import historique_db
 from generer_formulaires import mettre_a_jour_dropdowns_sets, extraire_id_set, FORMULAIRES
 
@@ -272,12 +273,42 @@ def commiter_et_pousser():
     subprocess.run(["git", "add", FICHIER_CONFIG_EXCEL, historique_db.FICHIER_DB, *chemins_formulaires], check=False)
 
     resultat = subprocess.run(["git", "diff", "--cached", "--quiet"])
-    if resultat.returncode != 0:
-        subprocess.run(["git", "commit", "-m", f"Traitement de la demande #{ISSUE_NUMBER}"], check=True)
-        subprocess.run(["git", "push"], check=True)
-        logging.info("Changements commités et poussés.")
-    else:
+    if resultat.returncode == 0:
         logging.info("Rien à committer.")
+        return
+
+    subprocess.run(["git", "commit", "-m", f"Traitement de la demande #{ISSUE_NUMBER}"], check=True)
+
+    def _tenter_push():
+        if subprocess.run(["git", "push"]).returncode == 0:
+            return
+
+        # Le push a été rejeté : une autre exécution (le scraping quotidien, ou
+        # un autre run de ce même workflow malgré le verrou de concurrence) a
+        # poussé sur la branche entre notre checkout et notre push. Sans ça, le
+        # script plantait ici et perdait silencieusement le changement (l'issue
+        # restait commentée "ajouté" mais jamais réellement enregistrée). On
+        # récupère les derniers changements et on rejoue notre commit par-dessus
+        # avant que la boucle de retry ne retente le push.
+        branche = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+        subprocess.run(["git", "fetch", "origin", branche], check=True)
+        if subprocess.run(["git", "rebase", f"origin/{branche}"]).returncode != 0:
+            # Vrai conflit (ex: le même fichier modifié des deux côtés) : on
+            # annule proprement plutôt que de laisser le dépôt à moitié rebasé,
+            # et on remonte une erreur claire au lieu de deviner une résolution.
+            subprocess.run(["git", "rebase", "--abort"], check=False)
+            raise RuntimeError(f"Conflit en rejouant le commit par-dessus origin/{branche} : intervention manuelle nécessaire.")
+        raise RuntimeError(f"Push rejeté (origin/{branche} avait avancé), nouvel essai après rebase.")
+
+    succes, erreur = executer_avec_retries(
+        _tenter_push, max_essais=4, pause_secondes=3,
+        on_echec=lambda e, tentative: logging.warning(f"Tentative {tentative} de push échouée, nouvel essai... ({e})"),
+    )
+    if not succes:
+        raise erreur
+    logging.info("Changements commités et poussés.")
 
 
 def main():
