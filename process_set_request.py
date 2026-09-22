@@ -110,15 +110,14 @@ def traiter_ajout(champs):
             "❌ `ID_Set` manquant ou invalide (uniquement lettres, chiffres, `-` et `_`). "
             "Modifie le formulaire et rouvre une demande."
         )
-        return False
+        return False, None
 
     if 'ID_Set' in df_config.columns and id_set in df_config['ID_Set'].astype(str).values:
         # Pas une erreur à proprement parler : l'état voulu (le set est suivi)
         # est déjà atteint, donc on ferme l'issue plutôt que de la laisser
         # ouverte indéfiniment (commiter_et_pousser() ne fera rien puisque la
         # config n'a pas changé, aucun risque à l'appeler ici).
-        commenter_issue(f"⚠️ Le set `{id_set}` est déjà suivi, aucune action effectuée.")
-        return True
+        return True, f"⚠️ Le set `{id_set}` est déjà suivi, aucune action effectuée."
 
     marque = (champs.get("Marque") or "LEGO").strip() or "LEGO"
     est_lego = marque.strip().upper() == "LEGO"
@@ -131,7 +130,7 @@ def traiter_ajout(champs):
                 f"❌ Pour une marque autre que LEGO (`{marque}`), le champ **Nom du set** est obligatoire "
                 "(pas de fiche Lego.com à scraper automatiquement)."
             )
-            return False
+            return False, None
         nom_marque_affiche = "Autre" if marque.startswith("Autre") else marque
         nouvelle_ligne = {
             "ID_Set": id_set,
@@ -149,7 +148,7 @@ def traiter_ajout(champs):
                 "(référence invalide, ou site temporairement bloquant). Tu peux réessayer plus tard, "
                 "ou ajouter le set manuellement en renseignant Nom/Image dans le formulaire."
             )
-            return False
+            return False, None
         nouvelle_ligne = {
             "ID_Set": id_set,
             "Nom_Set": metadata['nom'],
@@ -177,11 +176,16 @@ def traiter_ajout(champs):
     df_config.to_excel(FICHIER_CONFIG_EXCEL, index=False)
 
     resume = "\n".join(f"- **{k}** : {v}" for k, v in nouvelle_ligne.items() if v)
-    commenter_issue(
+    # Le commentaire de succès n'est posté qu'une fois le push réellement
+    # confirmé par main() (voir commiter_et_pousser) : le poster ici, avant que
+    # le commit/push n'ait eu lieu, avait déjà induit en erreur (l'issue disait
+    # "ajouté" alors qu'une erreur de push plus tard faisait planter le script
+    # avant que le changement ne soit réellement enregistré).
+    message_succes = (
         f"✅ Set `{id_set}` ajouté au suivi !\n\n{resume}\n\n"
         f"Il apparaîtra dans le prochain rapport quotidien et sur le [wiki](https://github.com/{GITHUB_REPOSITORY}/wiki)."
     )
-    return True
+    return True, message_succes
 
 
 OPTION_COLLECTION_NE_PAS_MODIFIER = "Ne pas modifier"
@@ -197,7 +201,7 @@ def traiter_modification(champs):
     id_set = extraire_id_set(champs.get("Set à modifier"))
     if 'ID_Set' not in df_config.columns or id_set not in df_config['ID_Set'].astype(str).values:
         commenter_issue(f"⚠️ Le set `{id_set}` n'a pas été trouvé dans le suivi, aucune action effectuée.")
-        return False
+        return False, None
 
     index = df_config.index[df_config['ID_Set'].astype(str) == id_set][0]
     changements = {}
@@ -215,7 +219,7 @@ def traiter_modification(champs):
                     f"Indique un nombre (ex: 45), le mot `{MOT_CLE_SUPPRESSION_SEUIL}` pour supprimer le seuil, "
                     "ou laisse le champ vide pour ne rien changer."
                 )
-                return False
+                return False, None
 
     choix_collection = (champs.get("Collection (laisser sur 'Ne pas modifier' pour ne rien changer)") or "").strip()
     if choix_collection and choix_collection != OPTION_COLLECTION_NE_PAS_MODIFIER:
@@ -223,7 +227,7 @@ def traiter_modification(champs):
             autre = (champs.get("Nom de la collection (si 'Autre thème' choisi ci-dessus)") or "").strip()
             if not autre:
                 commenter_issue("❌ Tu as choisi 'Autre thème' mais n'as pas précisé son nom dans le champ suivant.")
-                return False
+                return False, None
             changements['Collection'] = autre
         else:
             changements['Collection'] = choix_collection
@@ -234,7 +238,7 @@ def traiter_modification(champs):
 
     if not changements:
         commenter_issue("⚠️ Rien à modifier : remplis au moins le prix d'alerte, la collection ou l'URL Idealo.")
-        return False
+        return False, None
 
     for colonne, valeur in changements.items():
         # df_config est chargé en dtype=str (charger_config) : une valeur numérique
@@ -247,8 +251,7 @@ def traiter_modification(champs):
         f"- **{colonne}** : {'(supprimé)' if valeur is None else valeur}"
         for colonne, valeur in changements.items()
     )
-    commenter_issue(f"✏️ Set `{id_set}` mis à jour !\n\n{resume}")
-    return True
+    return True, f"✏️ Set `{id_set}` mis à jour !\n\n{resume}"
 
 
 def traiter_suppression(champs):
@@ -259,16 +262,14 @@ def traiter_suppression(champs):
         # Idem que pour un ajout déjà suivi : l'état voulu (le set n'est plus
         # suivi) est déjà atteint, donc on ferme l'issue plutôt que de la
         # laisser ouverte.
-        commenter_issue(f"⚠️ Le set `{id_set}` n'a pas été trouvé dans le suivi, aucune action effectuée.")
-        return True
+        return True, f"⚠️ Le set `{id_set}` n'a pas été trouvé dans le suivi, aucune action effectuée."
 
     df_config = df_config[df_config['ID_Set'].astype(str) != id_set]
     df_config.to_excel(FICHIER_CONFIG_EXCEL, index=False)
 
     historique_db.supprimer_set(id_set)
 
-    commenter_issue(f"🗑️ Set `{id_set}` retiré du suivi (configuration et historique nettoyés).")
-    return True
+    return True, f"🗑️ Set `{id_set}` retiré du suivi (configuration et historique nettoyés)."
 
 
 def commiter_et_pousser():
@@ -327,18 +328,34 @@ def main():
     labels = [l.strip() for l in ISSUE_LABELS.split(',') if l.strip()]
 
     if 'ajout-set' in labels:
-        succes = traiter_ajout(champs)
+        succes, message_succes = traiter_ajout(champs)
     elif 'suppression-set' in labels:
-        succes = traiter_suppression(champs)
+        succes, message_succes = traiter_suppression(champs)
     elif 'modification-set' in labels:
-        succes = traiter_modification(champs)
+        succes, message_succes = traiter_modification(champs)
     else:
         logging.info("Issue sans label reconnu (ajout-set/suppression-set/modification-set), rien à faire.")
         return
 
-    if succes:
+    if not succes:
+        return  # message d'erreur déjà posté par traiter_X ci-dessus
+
+    # Le commentaire de succès n'est posté qu'une fois le commit/push
+    # réellement confirmé : sinon une issue peut afficher "✅ ajouté" alors que
+    # le changement n'a en réalité jamais été enregistré dans le dépôt (vécu
+    # avec un push rejeté qui faisait planter le script après le commentaire).
+    try:
         commiter_et_pousser()
-        fermer_issue()
+    except Exception as e:
+        commenter_issue(
+            f"❌ Le changement a bien été calculé mais son enregistrement dans le dépôt a échoué "
+            f"({type(e).__name__}: {e}). Rien n'a été modifié. Réessaie en commentant `/relancer` "
+            "sur cette issue."
+        )
+        raise  # le run reste en échec dans Actions, pour rester visible
+
+    commenter_issue(message_succes)
+    fermer_issue()
 
 
 if __name__ == "__main__":
