@@ -14,8 +14,8 @@ import email_manager
 import historique_db
 from catch_lego_price import charger_configuration_sets_df, FICHIER_CONFIG_EXCEL
 from config_shared import (
-    SEUIL_BONNE_AFFAIRE, SEUIL_TRES_BONNE_AFFAIRE, construire_url_wiki_set,
-    charger_config_email, email_config_complete,
+    PRIX_MOYEN_PAR_COLLECTION, SEUIL_BONNE_AFFAIRE, SEUIL_TRES_BONNE_AFFAIRE,
+    construire_url_wiki_set, charger_config_email, email_config_complete,
 )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
@@ -55,30 +55,44 @@ def _temps_depuis_baisse_precedente(serie_prix):
     return (dates_baisse[-1] - dates_baisse[-2]).days
 
 
-def _analyser_set_pour_newsletter(id_set, nom_set, image_url, df_historique_set):
+def _analyser_set_pour_newsletter(id_set, nom_set, image_url, nb_pieces, collection, marque, df_historique_set):
     """Calcule les infos d'un set pour la newsletter : prix actuel, % de
     réduction par rapport au prix Lego.com de référence, classement bonne/très
     bonne affaire, prix le plus bas jamais enregistré (et sa date), et depuis
     quand le prix n'avait pas baissé. Retourne None si le set n'est pas
-    éligible (pas de prix Lego.com connu, ou pas actuellement une bonne
-    affaire)."""
+    éligible.
+
+    Le classement bonne/très bonne affaire réutilise le même calcul que le
+    wiki et l'alerte quotidienne (prix/pièce moyen de la collection, voir
+    PRIX_MOYEN_PAR_COLLECTION) plutôt que le prix Lego.com, pour rester
+    cohérent avec ce qui est déjà affiché ailleurs -- seul le pourcentage de
+    réduction affiché se base sur le prix Lego.com, comme demandé."""
     if df_historique_set.empty:
         return None
 
-    dernier_prix_par_site = df_historique_set.sort_values('Date').groupby('Site').last()
-    if 'Lego' not in dernier_prix_par_site.index:
-        return None  # Pas de prix Lego.com connu : impossible de calculer une réduction.
-
-    prix_lego = dernier_prix_par_site.loc['Lego', 'Prix']
-    prix_actuel = dernier_prix_par_site['Prix'].min()
-    if not prix_lego or prix_lego <= 0:
+    # Comme pour l'alerte quotidienne (catch_lego_price.py) et le wiki, le
+    # référentiel de prix moyen au pièce ne vaut que pour les gammes LEGO
+    # officielles.
+    if str(marque).strip().upper() != 'LEGO' or pd.isna(nb_pieces):
         return None
 
-    if prix_actuel <= prix_lego * SEUIL_TRES_BONNE_AFFAIRE:
+    prix_moyen = PRIX_MOYEN_PAR_COLLECTION.get(collection, PRIX_MOYEN_PAR_COLLECTION['default'])
+    prix_juste = nb_pieces * prix_moyen
+
+    dernier_prix_par_site = df_historique_set.sort_values('Date').groupby('Site').last()
+    prix_actuel = dernier_prix_par_site['Prix'].min()
+
+    if prix_actuel <= prix_juste * SEUIL_TRES_BONNE_AFFAIRE:
         categorie = "tres_bonne"
-    elif prix_actuel <= prix_lego * SEUIL_BONNE_AFFAIRE:
+    elif prix_actuel <= prix_juste * SEUIL_BONNE_AFFAIRE:
         categorie = "bonne"
     else:
+        return None
+
+    if 'Lego' not in dernier_prix_par_site.index:
+        return None  # Pas de prix Lego.com connu : impossible de calculer une réduction à afficher.
+    prix_lego = dernier_prix_par_site.loc['Lego', 'Prix']
+    if not prix_lego or prix_lego <= 0:
         return None
 
     pourcentage = round((1 - prix_actuel / prix_lego) * 100)
@@ -111,8 +125,15 @@ def calculer_deals_newsletter(df_config, df_historique):
         id_set = row['ID_Set']
         nom_set = row.get('Nom_Set', id_set)
         image_url = row.get('Image_URL', '')
+        nb_pieces = pd.to_numeric(row.get('nbPieces'), errors='coerce')
+        collection_brute = row.get('Collection')
+        collection = collection_brute if pd.notna(collection_brute) and str(collection_brute).strip() else None
+        marque_brute = row.get('Marque')
+        marque = marque_brute if pd.notna(marque_brute) and str(marque_brute).strip() else 'LEGO'
         df_historique_set = df_historique[df_historique['ID_Set'] == id_set]
-        resultat = _analyser_set_pour_newsletter(id_set, nom_set, image_url, df_historique_set)
+        resultat = _analyser_set_pour_newsletter(
+            id_set, nom_set, image_url, nb_pieces, collection, marque, df_historique_set
+        )
         if resultat is None:
             continue
         (tres_bonnes if resultat['categorie'] == 'tres_bonne' else bonnes).append(resultat)

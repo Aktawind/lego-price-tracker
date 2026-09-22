@@ -78,7 +78,7 @@ def test_newsletter_sujet_compte_les_deux_categories(monkeypatch):
     capture = {}
     monkeypatch.setattr(email_manager.envoi_email, 'envoyer', lambda sujet, *a, **k: capture.setdefault('sujet', sujet) or True)
     email_manager.envoyer_newsletter_hebdomadaire([DEAL_NEWSLETTER_TEST], [DEAL_NEWSLETTER_TEST, DEAL_NEWSLETTER_TEST], {})
-    assert capture['sujet'] == "🗞️ Newsletter LEGO : 3 bonnes affaires cette semaine"
+    assert capture['sujet'] == "Newsletter LEGO : 3 bonnes affaires cette semaine"
 
 
 def test_newsletter_html_contient_les_deux_sections(monkeypatch):

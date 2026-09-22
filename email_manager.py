@@ -198,13 +198,13 @@ def envoyer_newsletter_hebdomadaire(tres_bonnes_affaires, bonnes_affaires, email
     réduction décroissant par rapport au prix Lego.com de référence."""
 
     nombre_total = len(tres_bonnes_affaires) + len(bonnes_affaires)
-    sujet = f"🗞️ Newsletter LEGO : {nombre_total} bonne{accord_pluriel(nombre_total)} affaire{accord_pluriel(nombre_total)} cette semaine"
+    sujet = f"Newsletter LEGO : {nombre_total} bonne{accord_pluriel(nombre_total)} affaire{accord_pluriel(nombre_total)} cette semaine"
 
     text_body = "Bonjour,\n\nVoici les bonnes affaires de la semaine sur vos sets suivis :\n\n"
     html_body = """
     <html><body style="font-family: Arial, Helvetica, sans-serif; background-color:#f4f4f7; margin:0; padding:20px;">
     <div style="max-width:640px; margin:0 auto;">
-    <h2 style="color:#222;">🗞️ Newsletter hebdomadaire des bonnes affaires</h2>
+    <h2 style="color:#222;">Newsletter hebdomadaire des bonnes affaires</h2>
     """
 
     for titre, deals, couleur, libelle in (
