@@ -110,6 +110,43 @@ def extraire_collection(soup):
     return 'N/A', None
 
 
+def _extraire_produit_json_ld(soup):
+    """Cherche le nom et l'image du produit dans les données structurées JSON-LD
+    (schema.org Product) -- même principe que _extraire_prix_json_ld dans
+    scrapers/standard_scraper.py pour le prix, ou extraire_collection() ci-dessus
+    pour le thème : ces données pensées pour le SEO sont généralement présentes
+    dans le HTML initial et donc plus fiables qu'un sélecteur CSS qui suppose
+    que la page a fini de s'hydrater côté client."""
+    resultat = {}
+    try:
+        for script in soup.find_all('script', type='application/ld+json'):
+            try:
+                data = json.loads(script.string or '')
+            except (json.JSONDecodeError, TypeError):
+                continue
+            objets = data if isinstance(data, list) else [data]
+            for objet in objets:
+                if not isinstance(objet, dict) or objet.get('@type') != 'Product':
+                    continue
+                if not resultat.get('name') and isinstance(objet.get('name'), str) and objet['name'].strip():
+                    resultat['name'] = objet['name'].strip()
+                image = objet.get('image')
+                if not resultat.get('image'):
+                    if isinstance(image, str) and image.strip():
+                        resultat['image'] = image.strip()
+                    elif isinstance(image, list) and image and isinstance(image[0], str):
+                        resultat['image'] = image[0]
+                if not resultat.get('nb_pieces'):
+                    for prop in objet.get('additionalProperty') or []:
+                        if isinstance(prop, dict) and 'pièce' in str(prop.get('name', '')).lower():
+                            match = re.search(r'\d+', str(prop.get('value', '')))
+                            if match:
+                                resultat['nb_pieces'] = match.group(0)
+    except Exception:
+        pass
+    return resultat
+
+
 def get_lego_metadata(set_id, url=None):
     """Scrape Lego.com pour récupérer les métadonnées d'un set en utilisant Selenium.
     Accepte une URL précise en override de l'URL "ID nu" (product/<id>)
@@ -148,17 +185,34 @@ def get_lego_metadata(set_id, url=None):
 
     try:
         driver.get(url)
-        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '[data-test="product-overview-name"]')))
+        try:
+            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '[data-test="product-overview-name"]')))
+        except Exception:
+            # Comme pour scrapers/standard_scraper.py (scraping quotidien des prix) :
+            # on ne renonce pas juste parce que CE sélecteur précis n'est pas apparu
+            # à temps -- la page a pu charger correctement par ailleurs (notamment
+            # les données JSON-LD, indépendantes de l'hydratation JS de cette section),
+            # et le sélecteur lui-même a pu changer sans qu'on en soit informé.
+            logging.warning(f"Le sélecteur du nom n'est pas apparu à temps pour {set_id}, tentative d'extraction quand même sur la page chargée...")
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        
+        donnees_json_ld = _extraire_produit_json_ld(soup)
+
         # --- NOM ET IMAGE ---
         nom_set_elem = soup.find('h1', {'data-test': 'product-overview-name'})
-        nom_set = nom_set_elem.text.strip() if nom_set_elem else "Nom non trouvé"
-        
+        if nom_set_elem:
+            nom_set = nom_set_elem.text.strip()
+        elif donnees_json_ld.get('name'):
+            nom_set = donnees_json_ld['name']
+        else:
+            meta_title = soup.find('meta', property='og:title')
+            nom_set = meta_title['content'].strip() if meta_title and meta_title.has_attr('content') else "Nom non trouvé"
+
         image_url = ""
         image_elem = soup.select_one('[data-test="mediagallery-image-0"] source')
         if image_elem and image_elem.has_attr('srcset'):
             image_url = image_elem['srcset'].split(',')[0].split(' ')[0]
+        if not image_url and donnees_json_ld.get('image'):
+            image_url = donnees_json_ld['image']
         if not image_url:
             meta_image = soup.find('meta', property='og:image')
             if meta_image: image_url = meta_image['content']
@@ -183,11 +237,15 @@ def get_lego_metadata(set_id, url=None):
             if pieces_elem:
                 # On prend le texte de l'élément, qui devrait être le nombre
                 nb_pieces = pieces_elem.text.strip()
-        
+
+        # Plan C : données JSON-LD (si les Plans A et B ont échoué)
+        if nb_pieces == "N/A" and donnees_json_ld.get('nb_pieces'):
+            nb_pieces = donnees_json_ld['nb_pieces']
+
         # Message final si tout a échoué
         if nb_pieces == "N/A":
             logging.warning(f"Impossible de trouver le nombre de pièces pour {set_id} avec toutes les méthodes.")
-            
+
         # --- COLLECTION ---
         collection, methode_collection = extraire_collection(soup)
         if methode_collection:
@@ -203,11 +261,31 @@ def get_lego_metadata(set_id, url=None):
                 f"Titre de page='{titre_page}', liens de navigation détectés={liens_theme_proches}"
             )
 
+        if nom_set == "Nom non trouvé" or champ_manquant(image_url):
+            # Diagnostic loggé directement (visible dans les logs du run, sans avoir
+            # à télécharger l'artefact de diagnostic) : utile pour comprendre ce que
+            # lego.com a réellement renvoyé (redirection, blocage anti-bot...).
+            titre_page = soup.title.get_text(strip=True) if soup.title else "N/A"
+            logging.warning(
+                f"Extraction partielle pour {set_id} (nom='{nom_set}', image={'oui' if image_url else 'non'}). "
+                f"URL finale='{driver.current_url}', titre_page='{titre_page}', "
+                f"json_ld_present={bool(soup.find_all('script', type='application/ld+json'))}, "
+                f"selecteur_nom_present={bool(nom_set_elem)}"
+            )
+
         logging.info(f"Métadonnées récupérées : Nom='{nom_set}', Pièces='{nb_pieces}', Collection='{collection}'")
         return { "nom": nom_set, "image_url": image_url, "nb_pieces": nb_pieces, "collection": collection, "url_lego": url }
-        
+
     except Exception as e:
         logging.error(f"Erreur majeure lors de la récupération des métadonnées pour {set_id} : {type(e).__name__}: {e}")
+        try:
+            titre_page_erreur = BeautifulSoup(driver.page_source, 'html.parser').title
+            logging.error(
+                f"Diagnostic : URL finale='{driver.current_url}', "
+                f"titre_page='{titre_page_erreur.get_text(strip=True) if titre_page_erreur else 'N/A'}'"
+            )
+        except Exception:
+            pass
         try:
             sauvegarder_diagnostic_scraping(driver.page_source, url, driver=driver, prefixe="debug_lego_metadata")
         except Exception:
