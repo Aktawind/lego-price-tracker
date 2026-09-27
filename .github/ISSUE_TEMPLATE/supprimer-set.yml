@@ -18,6 +18,7 @@ body:
     description: Liste régénérée automatiquement à chaque changement de config.
     options:
     - 10300 — La machine à remonter le temps de Retour vers le futur
+    - 10313 — Bouquet de fleurs sauvages
     - 10321 — Corvette
     - 10339 — Le bureau de poste du Père Noël
     - 10361 — Le train de Noël
