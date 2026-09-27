@@ -2,6 +2,7 @@ import pandas as pd
 import os
 import re
 import json
+import time
 from bs4 import BeautifulSoup
 import logging
 import glob
@@ -184,38 +185,70 @@ def get_lego_metadata(set_id, url=None):
     wait = WebDriverWait(driver, 10)
 
     try:
-        driver.get(url)
-        try:
-            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '[data-test="product-overview-name"]')))
-        except Exception:
-            # Comme pour scrapers/standard_scraper.py (scraping quotidien des prix) :
-            # on ne renonce pas juste parce que CE sélecteur précis n'est pas apparu
-            # à temps -- la page a pu charger correctement par ailleurs (notamment
-            # les données JSON-LD, indépendantes de l'hydratation JS de cette section),
-            # et le sélecteur lui-même a pu changer sans qu'on en soit informé.
-            logging.warning(f"Le sélecteur du nom n'est pas apparu à temps pour {set_id}, tentative d'extraction quand même sur la page chargée...")
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
-        donnees_json_ld = _extraire_produit_json_ld(soup)
+        page_utilisable = False
+        for tentative in range(1, 3):
+            driver.get(url)
+            try:
+                wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '[data-test="product-overview-name"]')))
+            except Exception:
+                # Comme pour scrapers/standard_scraper.py (scraping quotidien des prix) :
+                # on ne renonce pas juste parce que CE sélecteur précis n'est pas apparu
+                # à temps -- la page a pu charger correctement par ailleurs (notamment
+                # les données JSON-LD, indépendantes de l'hydratation JS de cette section),
+                # et le sélecteur lui-même a pu changer sans qu'on en soit informé.
+                logging.warning(f"Le sélecteur du nom n'est pas apparu à temps pour {set_id} (tentative {tentative}/2), tentative d'extraction quand même sur la page chargée...")
+            soup = BeautifulSoup(driver.page_source, 'html.parser')
+            donnees_json_ld = _extraire_produit_json_ld(soup)
 
-        # --- NOM ET IMAGE ---
-        nom_set_elem = soup.find('h1', {'data-test': 'product-overview-name'})
-        if nom_set_elem:
-            nom_set = nom_set_elem.text.strip()
-        elif donnees_json_ld.get('name'):
-            nom_set = donnees_json_ld['name']
-        else:
-            meta_title = soup.find('meta', property='og:title')
-            nom_set = meta_title['content'].strip() if meta_title and meta_title.has_attr('content') else "Nom non trouvé"
+            # --- NOM ET IMAGE ---
+            nom_set_elem = soup.find('h1', {'data-test': 'product-overview-name'})
+            if nom_set_elem:
+                nom_set = nom_set_elem.text.strip()
+            elif donnees_json_ld.get('name'):
+                nom_set = donnees_json_ld['name']
+            else:
+                meta_title = soup.find('meta', property='og:title')
+                nom_set = meta_title['content'].strip() if meta_title and meta_title.has_attr('content') else "Nom non trouvé"
 
-        image_url = ""
-        image_elem = soup.select_one('[data-test="mediagallery-image-0"] source')
-        if image_elem and image_elem.has_attr('srcset'):
-            image_url = image_elem['srcset'].split(',')[0].split(' ')[0]
-        if not image_url and donnees_json_ld.get('image'):
-            image_url = donnees_json_ld['image']
-        if not image_url:
-            meta_image = soup.find('meta', property='og:image')
-            if meta_image: image_url = meta_image['content']
+            image_url = ""
+            image_elem = soup.select_one('[data-test="mediagallery-image-0"] source')
+            if image_elem and image_elem.has_attr('srcset'):
+                image_url = image_elem['srcset'].split(',')[0].split(' ')[0]
+            if not image_url and donnees_json_ld.get('image'):
+                image_url = donnees_json_ld['image']
+            if not image_url:
+                meta_image = soup.find('meta', property='og:image')
+                if meta_image: image_url = meta_image['content']
+
+            # Rien d'utilisable trouvé par AUCUNE méthode (ni sélecteur, ni JSON-LD,
+            # ni métadonnées og:) : la page n'a probablement pas fini de charger le
+            # vrai contenu (ex: écran d'attente "Un instant..." affiché par lego.com
+            # avant de servir la fiche produit -- observé en conditions réelles).
+            # On ne veut surtout pas enregistrer un set avec un nom bidon : on retente
+            # une fois avant d'abandonner.
+            page_utilisable = nom_set != "Nom non trouvé" or bool(image_url) or bool(donnees_json_ld)
+            if page_utilisable:
+                break
+            titre_page = soup.title.get_text(strip=True) if soup.title else "N/A"
+            logging.warning(
+                f"Tentative {tentative}/2 : rien d'utilisable trouvé pour {set_id} "
+                f"(titre_page='{titre_page}', json_ld_present={bool(soup.find_all('script', type='application/ld+json'))})."
+            )
+            if tentative < 2:
+                time.sleep(3)
+
+        if not page_utilisable:
+            # On logue un diagnostic exploitable et on renvoie un échec explicite --
+            # un set sans nom ni image n'est pas une donnée utilisable, mieux vaut
+            # laisser l'issue en échec (avec message clair) que polluer la config.
+            titre_page = soup.title.get_text(strip=True) if soup.title else "N/A"
+            logging.error(
+                f"Aucune métadonnée utilisable pour {set_id} après 2 tentatives. "
+                f"URL finale='{driver.current_url}', titre_page='{titre_page}', "
+                f"json_ld_present={bool(soup.find_all('script', type='application/ld+json'))}"
+            )
+            sauvegarder_diagnostic_scraping(driver.page_source, url, driver=driver, prefixe="debug_lego_metadata")
+            return None
 
         # === NOMBRE DE PIÈCES ===
         nb_pieces = "N/A"
