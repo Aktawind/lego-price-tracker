@@ -44,6 +44,7 @@ body:
     - 72537 — Derpy le tigre et Suzy la pie
     - 80121 — L’auberge traditionnelle du clair de lune
     - LUMI-LUNA — Luna Cottage
+    - LUMI-MAGIC-SHOP — Boutique de magie mémoire steampunk
   validations:
     required: true
 - type: input
