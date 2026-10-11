@@ -109,11 +109,6 @@
             "prix": 49.99
         },
         {
-            "site": "Cdiscount",
-            "url": "https://www.avenuedelabrique.com/go/px/115565",
-            "prix": 60.83
-        },
-        {
             "site": "Galaxus",
             "url": "https://www.avenuedelabrique.com/go/px/115402",
             "prix": 62.09
@@ -122,6 +117,11 @@
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/159665",
             "prix": 66.05
+        },
+        {
+            "site": "Cdiscount",
+            "url": "https://www.avenuedelabrique.com/go/px/115565",
+            "prix": 66.72
         },
         {
             "site": "Auchan",
@@ -175,7 +175,7 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/160416",
-            "prix": 291.95
+            "prix": 291.88
         }
     ],
     "11376": [
@@ -212,7 +212,7 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/158658",
-            "prix": 116.4
+            "prix": 117.41
         },
         {
             "site": "Fnac",
@@ -259,7 +259,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/147461",
-            "prix": 124.2
+            "prix": 123.8
         },
         {
             "site": "Lego",
@@ -316,7 +316,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/148706",
-            "prix": 104.06
+            "prix": 103.69
         },
         {
             "site": "Lego",
@@ -509,7 +509,7 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/160463",
-            "prix": 267.25
+            "prix": 270.42
         },
         {
             "site": "Amazon",
@@ -597,7 +597,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/148707",
-            "prix": 432.51
+            "prix": 433.72
         },
         {
             "site": "Lego",
