@@ -45,17 +45,17 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/106506",
-            "prix": 216.99
+            "prix": 216.96
         },
         {
             "site": "Amazon",
             "url": "https://www.avenuedelabrique.com/go/px/99864",
-            "prix": 225.39
+            "prix": 219.99
         },
         {
             "site": "Auchan",
             "url": "https://www.avenuedelabrique.com/go/px/132805",
-            "prix": 266.71
+            "prix": 266.36
         },
         {
             "site": "Galaxus",
@@ -121,7 +121,7 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/159665",
-            "prix": 66.42
+            "prix": 66.22
         },
         {
             "site": "Cdiscount",
@@ -217,7 +217,7 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/158658",
-            "prix": 116.65
+            "prix": 117.14
         },
         {
             "site": "Fnac",
@@ -272,11 +272,6 @@
             "prix": 115.99
         },
         {
-            "site": "Fnac",
-            "url": "https://www.avenuedelabrique.com/go/px/147461",
-            "prix": 122.15
-        },
-        {
             "site": "Rue du Commerce",
             "url": "https://www.avenuedelabrique.com/go/px/161390",
             "prix": 122.95
@@ -300,6 +295,11 @@
             "site": "La Grande Récré",
             "url": "https://www.avenuedelabrique.com/go/px/147843",
             "prix": 129.99
+        },
+        {
+            "site": "Fnac",
+            "url": "https://www.avenuedelabrique.com/go/px/147461",
+            "prix": 131.22
         }
     ],
     "11383": [
@@ -330,8 +330,8 @@
         },
         {
             "site": "Carrefour",
-            "url": "https://www.avenuedelabrique.com/go/px/148694",
-            "prix": 99.99
+            "url": "https://www.avenuedelabrique.com/go/px/158663",
+            "prix": 99.56
         },
         {
             "site": "Rue du Commerce",
@@ -341,7 +341,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/148706",
-            "prix": 105.9
+            "prix": 107.11
         },
         {
             "site": "Lego",
@@ -373,11 +373,6 @@
         {
             "site": "Leclerc",
             "url": "https://www.avenuedelabrique.com/go/px/135874",
-            "prix": 40.79
-        },
-        {
-            "site": "Amazon",
-            "url": "https://www.avenuedelabrique.com/go/px/135778",
             "prix": 40.79
         },
         {
@@ -647,7 +642,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/148707",
-            "prix": 437.35
+            "prix": 431.26
         },
         {
             "site": "Lego",
