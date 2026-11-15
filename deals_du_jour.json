@@ -18,7 +18,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/121721",
-            "prix": 198.99
+            "prix": 199.98
         },
         {
             "site": "Lego",
@@ -307,14 +307,14 @@
             "prix": 109.99
         },
         {
+            "site": "Fnac",
+            "url": "https://www.avenuedelabrique.com/go/px/147461",
+            "prix": 120.96
+        },
+        {
             "site": "Rue du Commerce",
             "url": "https://www.avenuedelabrique.com/go/px/161390",
             "prix": 122.95
-        },
-        {
-            "site": "Fnac",
-            "url": "https://www.avenuedelabrique.com/go/px/147461",
-            "prix": 125.73
         },
         {
             "site": "KidInn",
@@ -601,7 +601,7 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/156283",
-            "prix": 235.37
+            "prix": 247.42
         },
         {
             "site": "Ltoys",
@@ -611,15 +611,10 @@
         {
             "site": "Auchan",
             "url": "https://www.avenuedelabrique.com/go/px/163780",
-            "prix": 265.64
+            "prix": 254.74
         }
     ],
     "31394": [
-        {
-            "site": "Carrefour",
-            "url": "https://www.avenuedelabrique.com/go/px/160752",
-            "prix": 22.99
-        },
         {
             "site": "Lego",
             "url": "https://www.avenuedelabrique.com/go/px/145602",
@@ -700,11 +695,6 @@
             "prix": 361.7
         },
         {
-            "site": "Auchan",
-            "url": "https://www.avenuedelabrique.com/go/px/152135",
-            "prix": 412.02
-        },
-        {
             "site": "KidInn",
             "url": "https://www.avenuedelabrique.com/go/px/150933",
             "prix": 418.99
@@ -713,6 +703,11 @@
             "site": "Rue du Commerce",
             "url": "https://www.avenuedelabrique.com/go/px/161083",
             "prix": 419.95
+        },
+        {
+            "site": "Auchan",
+            "url": "https://www.avenuedelabrique.com/go/px/152135",
+            "prix": 425.3
         },
         {
             "site": "Lego",
