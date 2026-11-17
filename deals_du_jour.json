@@ -82,7 +82,7 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/161795",
-            "prix": 173.95
+            "prix": 172.95
         },
         {
             "site": "Auchan",
@@ -126,7 +126,7 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/159665",
-            "prix": 62.03
+            "prix": 61.14
         },
         {
             "site": "Galaxus",
@@ -136,7 +136,7 @@
         {
             "site": "Cdiscount",
             "url": "https://www.avenuedelabrique.com/go/px/115565",
-            "prix": 66.2
+            "prix": 64.25
         }
     ],
     "10372": [
@@ -190,7 +190,7 @@
         {
             "site": "Carrefour",
             "url": "https://www.avenuedelabrique.com/go/px/160416",
-            "prix": 269.19
+            "prix": 255.86
         },
         {
             "site": "Lego",
@@ -231,13 +231,13 @@
         },
         {
             "site": "Carrefour",
-            "url": "https://www.avenuedelabrique.com/go/px/158658",
-            "prix": 118.53
+            "url": "https://www.avenuedelabrique.com/go/px/136763",
+            "prix": 119.99
         },
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/136659",
-            "prix": 120.9
+            "prix": 120.52
         },
         {
             "site": "KidInn",
@@ -552,7 +552,7 @@
         {
             "site": "Cdiscount",
             "url": "https://www.avenuedelabrique.com/go/px/148449",
-            "prix": 67.19
+            "prix": 73.53
         },
         {
             "site": "KidInn",
@@ -805,7 +805,7 @@
         {
             "site": "Amazon",
             "url": "https://www.avenuedelabrique.com/go/px/142670",
-            "prix": 44.99
+            "prix": 46.9
         },
         {
             "site": "Auchan",
@@ -882,7 +882,7 @@
         {
             "site": "Fnac",
             "url": "https://www.avenuedelabrique.com/go/px/145699",
-            "prix": 145.19
+            "prix": 141.77
         }
     ]
 }
